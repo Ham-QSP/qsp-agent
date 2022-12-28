@@ -17,17 +17,18 @@ use std::env;
 
 mod signaling;
 
-use crate::signaling::signaling_server_connection::SignalingServerConnection;
+use crate::signaling::signaling_server_connection::SignalingServerManager;
 
 const APPLICATION_VERSION: &'static str = "0.1.0";
 const AGENT_TYPE_NAME: &'static str = "F4FEZ Agent";
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let connect_addr =
         env::args().nth(1).unwrap_or_else(|| panic!("this program requires as argument the signaling server url"));
 
     let url = url::Url::parse(&connect_addr).unwrap();
 
-    let mut signal_server_session = SignalingServerConnection::new();
-    signal_server_session.start(url).expect("Can't start. Failed to connect the signaling server");
+    let mut signal_server_session = SignalingServerManager::new();
+    signal_server_session.start(url).await.expect("Can't start. Failed to connect the signaling server");
 }
