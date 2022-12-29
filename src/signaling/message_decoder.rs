@@ -73,6 +73,8 @@ pub struct ClientInitPayload {
 #[derive(Serialize, Deserialize)]
 pub struct ClientInitResponsePayload {
     pub sdp: String,
+    #[serde(rename = "agentSessionUuid")]
+    pub agent_session_uuid: Arc<String>
 }
 
 pub fn decode_agent_message(message_str: String) -> AgentSocketMessage {
