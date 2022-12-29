@@ -13,7 +13,11 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
-use tungstenite::{connect, Message};
+
+use std::rc::Rc;
+use std::sync::Arc;
+use futures_util::{future, pin_mut, StreamExt};
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use crate::{AGENT_TYPE_NAME, APPLICATION_VERSION};
 use crate::signaling::message_decoder::{AgentDescription, AgentSocketMessage, ClientInitResponsePayload, decode_agent_message};
@@ -24,61 +28,82 @@ const PROTOCOL_VERSION_MINOR: i32 = 1;
 #[derive(thiserror::Error, Debug)]
 pub enum SignalingServerError {
     #[error("Can't connect the signaling server")]
-    ConnectionFailed(#[from] tungstenite::Error),
+    ConnectionFailed(#[from] tokio_tungstenite::tungstenite::Error),
     #[error("Can't connect the signaling server")]
     ProtocolFormatError(#[from] serde_json::Error),
 }
 
-pub struct SignalingServerConnection {}
+pub struct SignalingServerSession {
+    agent_description: Rc<AgentDescription>,
+}
 
 
-impl SignalingServerConnection {
+pub struct SignalingServerManager {
+    agent_description: Rc<AgentDescription>,
+}
+
+impl SignalingServerManager {
     pub fn new() -> Self {
-        Self {}
-    }
-
-    pub fn start(&mut self, url: url::Url) -> Result<(), SignalingServerError> {
-        let (mut socket, _) =
-            connect(url)?;
-
-        loop {
-            let msg_str = socket.read_message()?;
-            let msg = decode_agent_message(msg_str.into_text()?);
-            let tx_message = self.process_message(msg);
-            if let Some(tx_message) = tx_message {
-                let tx_message_str = serde_json::to_string(&tx_message)?;
-                socket.write_message(Message::Text(tx_message_str))?;
-            }
+        Self {
+            agent_description: Rc::new(AgentDescription {
+                agent_type: Rc::new(AGENT_TYPE_NAME.to_string()),
+                version: Rc::new(APPLICATION_VERSION.to_string()),
+                protocol_major_version: PROTOCOL_VERSION_MAJOR,
+                protocol_minor_version: PROTOCOL_VERSION_MINOR,
+                agent_name: Rc::new("In development".to_string()),
+            })
         }
     }
 
-    fn process_message(&mut self, message: AgentSocketMessage) -> Option<AgentSocketMessage> {
-        match message {
-            AgentSocketMessage::ServerHello { data } => {
-                println!("Received command Server hello. Server is '{}'", data.server_name);
-                let agent_description = AgentDescription {
-                    agent_type: AGENT_TYPE_NAME.to_string(),
-                    version: APPLICATION_VERSION.to_string(),
-                    protocol_major_version: PROTOCOL_VERSION_MAJOR,
-                    protocol_minor_version: PROTOCOL_VERSION_MINOR,
-                    agent_name: "In development".to_string(),
-                };
-                Some(AgentSocketMessage::AgentHello { data: agent_description })
-            }
-            AgentSocketMessage::ClientInitMessage { data } => {
-                println!("Received client init");
-                Some(AgentSocketMessage::ClientInitResponseMessage {
-                    data: ClientInitResponsePayload { sdp: "Mocked agent sdp payload".to_string() }
-                })
-            }
-            _ => {
-                println!("Received unexpected command type");
-                Some(AgentSocketMessage::ErrorMessage {
-                    error_code: 102,
-                    error_message: "Agent received invalid command name".to_string(),
-                    exchange_id: 0,
-                })
-            }
+    pub async fn start(&mut self, url: url::Url) -> Result<(), SignalingServerError> {
+        let (ws_stream, _) = connect_async(url).await.expect("Failed to connect");
+        let (write, read) = ws_stream.split();
+
+        let session = Arc::new(self.create_session());
+        let (send_tx, send_rx) = futures_channel::mpsc::unbounded();
+        let send_to_ws = send_rx.map(Ok).forward(write);
+
+        let receive_from_ws = {
+            read.for_each(|message| async {
+                let msg_str = message.expect("error message");
+                let msg = decode_agent_message(msg_str.into_text().expect("Deserialization error"));
+                let tx_message = process_message(session.clone(), msg);
+                if let Some(tx_message) = tx_message {
+                    let tx_message_str = serde_json::to_string(&tx_message).expect("Serialization error");
+                    send_tx.unbounded_send(Message::Text(tx_message_str)).expect("Can't send message");
+                }
+            })
+        };
+
+        pin_mut!(send_to_ws, receive_from_ws);
+        future::select(send_to_ws, receive_from_ws).await;
+        Ok(())
+    }
+
+    pub fn create_session(&self) -> SignalingServerSession {
+        SignalingServerSession { agent_description: self.agent_description.clone() }
+    }
+}
+
+fn process_message(session: Arc<SignalingServerSession>, message: AgentSocketMessage) -> Option<AgentSocketMessage> {
+    match message {
+        AgentSocketMessage::ServerHello { data } => {
+            println!("Received command Server hello. Server is '{}'", data.server_name);
+            Some(AgentSocketMessage::AgentHello { data: session.agent_description.clone() })
+        }
+        AgentSocketMessage::ClientInitMessage { data } => {
+            println!("Received client init");
+            Some(AgentSocketMessage::ClientInitResponseMessage {
+                data: ClientInitResponsePayload { sdp: "Mocked agent sdp payload".to_string() }
+            })
+        }
+        _ => {
+            println!("Received unexpected command type");
+            Some(AgentSocketMessage::ErrorMessage {
+                error_code: 102,
+                error_message: "Agent received invalid command name".to_string(),
+                exchange_id: 0,
+            })
         }
     }
 }

@@ -13,6 +13,7 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
+use std::rc::Rc;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -21,7 +22,7 @@ pub enum AgentSocketMessage {
     #[serde(rename = "SERVER_HELLO")]
     ServerHello { data: ServerDescription },
     #[serde(rename = "AGENT_HELLO")]
-    AgentHello { data: AgentDescription },
+    AgentHello { data: Rc<AgentDescription> },
     #[serde(rename = "MESSAGE_ERROR")]
     ErrorMessage {
         #[serde(rename = "errorCode")]
@@ -53,14 +54,14 @@ pub struct ServerDescription {
 #[derive(Serialize, Deserialize)]
 pub struct AgentDescription {
     #[serde(rename = "agentType")]
-    pub agent_type: String,
-    pub version: String,
+    pub agent_type: Rc<String>,
+    pub version: Rc<String>,
     #[serde(rename = "protocolMajorVersion")]
     pub protocol_major_version: i32,
     #[serde(rename = "protocolMinorVersion")]
     pub protocol_minor_version: i32,
     #[serde(rename = "agentName")]
-    pub agent_name: String
+    pub agent_name: Rc<String>
 }
 
 #[derive(Serialize, Deserialize)]
