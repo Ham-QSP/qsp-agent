@@ -24,6 +24,8 @@ const AGENT_TYPE_NAME: &'static str = "F4FEZ Agent";
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     let connect_addr =
         env::args().nth(1).unwrap_or_else(|| panic!("this program requires as argument the signaling server url"));
 

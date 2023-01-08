@@ -15,6 +15,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 
 
 use std::sync::Arc;
+use log::{info};
 
 use futures_util::{future, pin_mut, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
@@ -93,17 +94,17 @@ impl SignalingServerManager {
 fn process_message(session: Arc<SignalingServerSession>, message: AgentSocketMessage) -> Option<AgentSocketMessage> {
     match message {
         AgentSocketMessage::ServerHello { data } => {
-            println!("Got server hello. Server name is '{}'", data.server_name);
+            info!("Got server hello. Server name is '{}'", data.server_name);
             Some(AgentSocketMessage::AgentHello { data: session.agent_description.clone() })
         }
         AgentSocketMessage::ClientInitMessage { data } => {
-            println!("Received client init");
+            info!("Received client init");
             Some(AgentSocketMessage::ClientInitResponseMessage {
                 data: ClientInitResponsePayload { sdp: "Mocked agent sdp payload".to_string() }
             })
         }
         _ => {
-            println!("Received unexpected command type");
+            info!("Received unexpected command type");
             Some(AgentSocketMessage::ErrorMessage {
                 error_code: 102,
                 error_message: "Agent received invalid command name".to_string(),
