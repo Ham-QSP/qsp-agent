@@ -15,9 +15,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 
 use std::env;
 
-mod signaling;
-
 use crate::signaling::signaling_server_connection::SignalingServerManager;
+
+mod signaling;
 
 const APPLICATION_VERSION: &'static str = "0.1.0";
 const AGENT_TYPE_NAME: &'static str = "F4FEZ Agent";
@@ -29,6 +29,6 @@ async fn main() {
 
     let url = url::Url::parse(&connect_addr).unwrap();
 
-    let mut signal_server_session = SignalingServerManager::new();
-    signal_server_session.start(url).await.expect("Can't start. Failed to connect the signaling server");
+    let signal_server_session = SignalingServerManager::new();
+    signal_server_session.start(url).await;
 }

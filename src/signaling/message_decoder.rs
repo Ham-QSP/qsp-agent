@@ -13,7 +13,8 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
-use std::rc::Rc;
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -22,7 +23,7 @@ pub enum AgentSocketMessage {
     #[serde(rename = "SERVER_HELLO")]
     ServerHello { data: ServerDescription },
     #[serde(rename = "AGENT_HELLO")]
-    AgentHello { data: Rc<AgentDescription> },
+    AgentHello { data: Arc<AgentDescription> },
     #[serde(rename = "MESSAGE_ERROR")]
     ErrorMessage {
         #[serde(rename = "errorCode")]
@@ -48,30 +49,30 @@ pub struct ServerDescription {
     #[serde(rename = "protocolMinorVersion")]
     pub protocol_minor_version: i32,
     #[serde(rename = "serverName")]
-    pub server_name: String
+    pub server_name: String,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct AgentDescription {
     #[serde(rename = "agentType")]
-    pub agent_type: Rc<String>,
-    pub version: Rc<String>,
+    pub agent_type: Arc<String>,
+    pub version: Arc<String>,
     #[serde(rename = "protocolMajorVersion")]
     pub protocol_major_version: i32,
     #[serde(rename = "protocolMinorVersion")]
     pub protocol_minor_version: i32,
     #[serde(rename = "agentName")]
-    pub agent_name: Rc<String>
+    pub agent_name: Arc<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ClientInitPayload {
-    pub sdp: String
+    pub sdp: String,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ClientInitResponsePayload {
-    pub sdp: String
+    pub sdp: String,
 }
 
 pub fn decode_agent_message(message_str: String) -> AgentSocketMessage {

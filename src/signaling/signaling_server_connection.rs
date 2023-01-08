@@ -14,8 +14,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
 
-use std::rc::Rc;
 use std::sync::Arc;
+
 use futures_util::{future, pin_mut, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
@@ -34,32 +34,36 @@ pub enum SignalingServerError {
 }
 
 pub struct SignalingServerSession {
-    agent_description: Rc<AgentDescription>,
+    agent_description: Arc<AgentDescription>,
 }
 
-
 pub struct SignalingServerManager {
-    agent_description: Rc<AgentDescription>,
+    agent_description: Arc<AgentDescription>,
 }
 
 impl SignalingServerManager {
     pub fn new() -> Self {
         Self {
-            agent_description: Rc::new(AgentDescription {
-                agent_type: Rc::new(AGENT_TYPE_NAME.to_string()),
-                version: Rc::new(APPLICATION_VERSION.to_string()),
+            agent_description: Arc::new(AgentDescription {
+                agent_type: Arc::new(AGENT_TYPE_NAME.to_string()),
+                version: Arc::new(APPLICATION_VERSION.to_string()),
                 protocol_major_version: PROTOCOL_VERSION_MAJOR,
                 protocol_minor_version: PROTOCOL_VERSION_MINOR,
-                agent_name: Rc::new("In development".to_string()),
+                agent_name: Arc::new("In development".to_string()),
             })
         }
     }
+    pub async fn start(self, url: url::Url) {
+        let signaling_server_manager: Arc<SignalingServerManager> = Arc::new(self);
+        let connection = tokio::spawn(SignalingServerManager::connect(signaling_server_manager.clone(), url));
+        connection.await.expect("Failed to connect signaling server").expect("TODO: panic message");
+    }
 
-    pub async fn start(&mut self, url: url::Url) -> Result<(), SignalingServerError> {
-        let (ws_stream, _) = connect_async(url).await.expect("Failed to connect");
+    async fn connect(signaling_server_manager: Arc<SignalingServerManager>, url: url::Url) -> Result<(), SignalingServerError>{
+        let (ws_stream, _) = connect_async(url).await?;
         let (write, read) = ws_stream.split();
 
-        let session = Arc::new(self.create_session());
+        let session = Arc::new(SignalingServerManager::create_session(signaling_server_manager.agent_description.clone()));
         let (send_tx, send_rx) = futures_channel::mpsc::unbounded();
         let send_to_ws = send_rx.map(Ok).forward(write);
 
@@ -77,18 +81,19 @@ impl SignalingServerManager {
 
         pin_mut!(send_to_ws, receive_from_ws);
         future::select(send_to_ws, receive_from_ws).await;
+
         Ok(())
     }
 
-    pub fn create_session(&self) -> SignalingServerSession {
-        SignalingServerSession { agent_description: self.agent_description.clone() }
+    fn create_session(agent_description: Arc<AgentDescription>) -> SignalingServerSession {
+        SignalingServerSession { agent_description }
     }
 }
 
 fn process_message(session: Arc<SignalingServerSession>, message: AgentSocketMessage) -> Option<AgentSocketMessage> {
     match message {
         AgentSocketMessage::ServerHello { data } => {
-            println!("Received command Server hello. Server is '{}'", data.server_name);
+            println!("Got server hello. Server name is '{}'", data.server_name);
             Some(AgentSocketMessage::AgentHello { data: session.agent_description.clone() })
         }
         AgentSocketMessage::ClientInitMessage { data } => {
