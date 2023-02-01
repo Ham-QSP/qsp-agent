@@ -14,14 +14,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
 
+use anyhow::Result;
 use std::sync::Arc;
-use log::{info};
+use log::{debug, info};
 
 use futures_util::{future, pin_mut, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use crate::{AGENT_TYPE_NAME, APPLICATION_VERSION};
 use crate::signaling::message_decoder::{AgentDescription, AgentSocketMessage, ClientInitResponsePayload, decode_agent_message};
+use crate::webrtc::webrtc_session::{WebrtcSessionManager};
 
 const PROTOCOL_VERSION_MAJOR: i32 = 0;
 const PROTOCOL_VERSION_MINOR: i32 = 1;
@@ -40,31 +42,32 @@ pub struct SignalingServerSession {
 
 pub struct SignalingServerManager {
     agent_description: Arc<AgentDescription>,
+    webrtc_session_manager: Arc<WebrtcSessionManager>,
 }
 
 impl SignalingServerManager {
-    pub fn new() -> Self {
+    pub fn new(webrtc_session_manager: Arc<WebrtcSessionManager>) -> Self {
         Self {
             agent_description: Arc::new(AgentDescription {
                 agent_type: Arc::new(AGENT_TYPE_NAME.to_string()),
                 version: Arc::new(APPLICATION_VERSION.to_string()),
                 protocol_major_version: PROTOCOL_VERSION_MAJOR,
                 protocol_minor_version: PROTOCOL_VERSION_MINOR,
-                agent_name: Arc::new("In development".to_string()),
-            })
+                agent_name: Arc::new("Agent in development".to_string()),
+            }),
+            webrtc_session_manager
         }
     }
     pub async fn start(self, url: url::Url) {
-        let signaling_server_manager: Arc<SignalingServerManager> = Arc::new(self);
-        let connection = tokio::spawn(SignalingServerManager::connect(signaling_server_manager.clone(), url));
-        connection.await.expect("Failed to connect signaling server").expect("TODO: panic message");
+        let connection = tokio::spawn(self.connect(url));
+        connection.await.expect("An error occur in session management").expect("TODO: panic message");
     }
 
-    async fn connect(signaling_server_manager: Arc<SignalingServerManager>, url: url::Url) -> Result<(), SignalingServerError>{
+    async fn connect(self, url: url::Url) -> Result<(), SignalingServerError> {
         let (ws_stream, _) = connect_async(url).await?;
         let (write, read) = ws_stream.split();
 
-        let session = Arc::new(SignalingServerManager::create_session(signaling_server_manager.agent_description.clone()));
+        let session = Arc::new(SignalingServerManager::create_session(self.agent_description.clone()));
         let (send_tx, send_rx) = futures_channel::mpsc::unbounded();
         let send_to_ws = send_rx.map(Ok).forward(write);
 
@@ -72,7 +75,10 @@ impl SignalingServerManager {
             read.for_each(|message| async {
                 let msg_str = message.expect("error message");
                 let msg = decode_agent_message(msg_str.into_text().expect("Deserialization error"));
-                let tx_message = process_message(session.clone(), msg);
+                let tx_message = SignalingServerManager::process_message(
+                    self.webrtc_session_manager.clone(),
+                    session.clone(),
+                    msg).await.unwrap();
                 if let Some(tx_message) = tx_message {
                     let tx_message_str = serde_json::to_string(&tx_message).expect("Serialization error");
                     send_tx.unbounded_send(Message::Text(tx_message_str)).expect("Can't send message");
@@ -89,27 +95,33 @@ impl SignalingServerManager {
     fn create_session(agent_description: Arc<AgentDescription>) -> SignalingServerSession {
         SignalingServerSession { agent_description }
     }
-}
 
-fn process_message(session: Arc<SignalingServerSession>, message: AgentSocketMessage) -> Option<AgentSocketMessage> {
-    match message {
-        AgentSocketMessage::ServerHello { data } => {
-            info!("Got server hello. Server name is '{}'", data.server_name);
-            Some(AgentSocketMessage::AgentHello { data: session.agent_description.clone() })
+
+    async fn process_message(webrtc_session_manager: Arc<WebrtcSessionManager>,
+                             session: Arc<SignalingServerSession>,
+                             message: AgentSocketMessage) -> Result<Option<AgentSocketMessage>> {
+        match message {
+            AgentSocketMessage::ServerHello { data } => {
+                info!("Got server hello. Server name is '{}'", data.server_name);
+                Ok(Some(AgentSocketMessage::AgentHello { data: session.agent_description.clone() }))
+            }
+            AgentSocketMessage::ClientInitMessage { data } => {
+                info!("Received client init");
+                let (agent_sdp, uuid) = webrtc_session_manager.add_session( data.sdp).await?;
+                debug!("Client init complete. Send client init response with uuid={}", uuid);
+                Ok(Some(AgentSocketMessage::ClientInitResponseMessage {
+                    data: ClientInitResponsePayload { sdp: agent_sdp.to_string(), agent_session_uuid: uuid }
+                }))
+            }
+            _ => {
+                info!("Received unexpected command type");
+                Ok(Some(AgentSocketMessage::ErrorMessage {
+                    error_code: 102,
+                    error_message: "Agent received invalid command name".to_string(),
+                    exchange_id: 0,
+                }))
+            }
         }
-        AgentSocketMessage::ClientInitMessage { data } => {
-            info!("Received client init");
-            Some(AgentSocketMessage::ClientInitResponseMessage {
-                data: ClientInitResponsePayload { sdp: "Mocked agent sdp payload".to_string() }
-            })
-        }
-        _ => {
-            info!("Received unexpected command type");
-            Some(AgentSocketMessage::ErrorMessage {
-                error_code: 102,
-                error_message: "Agent received invalid command name".to_string(),
-                exchange_id: 0,
-            })
-        }
+
     }
 }
