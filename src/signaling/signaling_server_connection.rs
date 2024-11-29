@@ -58,13 +58,13 @@ impl SignalingServerManager {
             webrtc_session_manager
         }
     }
-    pub async fn start(self, url: url::Url) {
+    pub async fn start(self, url: String) {
         let connection = tokio::spawn(self.connect(url));
         connection.await.expect("An error occur in session management").expect("TODO: panic message");
     }
 
-    async fn connect(self, url: url::Url) -> Result<(), SignalingServerError> {
-        let (ws_stream, _) = connect_async(url).await?;
+    async fn connect(self, url: String) -> Result<(), SignalingServerError> {
+        let (ws_stream, _) = connect_async(&url).await?;
         let (write, read) = ws_stream.split();
 
         let session = Arc::new(SignalingServerManager::create_session(self.agent_description.clone()));

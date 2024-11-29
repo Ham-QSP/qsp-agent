@@ -35,7 +35,7 @@ use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use webrtc::track::track_local::TrackLocal;
 
-use crate::hardware::audio::AudioEncodedFrame;
+use crate::audio::AudioEncodedFrame;
 
 pub async fn start_session(client_sdp: String, encoded_receiver: Receiver<AudioEncodedFrame>)
                            -> Result<(Arc<RTCPeerConnection>, Box<String>)> {

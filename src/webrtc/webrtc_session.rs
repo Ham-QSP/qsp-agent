@@ -21,7 +21,7 @@ use log::{debug, info};
 use uuid::Uuid;
 use webrtc::peer_connection::RTCPeerConnection;
 
-use crate::hardware::audio::{AudioEncodedFrame, AudioManager};
+use crate::audio::{AudioEncodedFrame};
 use crate::webrtc::webrtc_util::start_session;
 
 pub struct WebrtcSession {

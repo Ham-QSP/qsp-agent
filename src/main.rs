@@ -13,13 +13,14 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
+mod audio;
 mod signaling;
 mod webrtc;
 mod hardware;
 
 use std::env;
 use std::sync::{Arc};
-use crate::hardware::audio::{ AudioManager};
+use crate::hardware::audio_io::{ AudioManager};
 
 use crate::signaling::signaling_server_connection::SignalingServerManager;
 use crate::webrtc::webrtc_session::WebrtcSessionManager;
@@ -43,7 +44,7 @@ async fn main() {
     let url = url::Url::parse(&connect_addr).unwrap();
 
     let signal_server_session = SignalingServerManager::new(webrtc_session_manager.clone());
-    signal_server_session.start(url).await;
+    signal_server_session.start(connect_addr).await;
 
     drop(stream);
 }

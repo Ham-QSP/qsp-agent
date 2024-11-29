@@ -13,19 +13,17 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
-use std::fs::File;
-use std::io::Write;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use std::thread;
+use tokio::time::Duration;
 
 use bytes::Bytes;
-use cpal::{BufferSize, SampleFormat, SampleRate, SupportedStreamConfig, SupportedStreamConfigRange};
+use cpal::{ SampleFormat, SampleRate, SupportedStreamConfig, SupportedStreamConfigRange};
 use cpal::Stream;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use flume::Receiver;
 use log::{debug, info};
-use opus::Encoder;
-use tokio::time::Duration;
+use crate::audio::{AudioEncodedFrame, AudioFrame};
 
 pub struct AudioManager {}
 
@@ -33,7 +31,7 @@ impl AudioManager {
     pub fn new() -> Self {
         Self {}
     }
-    pub fn start(mut self) -> (Stream, Receiver<AudioEncodedFrame>) {
+    pub fn start(self) -> (Stream, Receiver<AudioEncodedFrame>) {
         let (sender, frame_receiver) = flume::bounded::<AudioFrame>(3);
         let (encoded_sender, encoded_receiver) = flume::bounded::<AudioEncodedFrame>(3);
 
@@ -83,7 +81,7 @@ impl AudioManager {
             eprintln!("an error occurred on stream: {}", err);
         };
 
-        let mut config = config.config();
+        let config = config.config();
         // until it is 960
         let mut buffer: Vec<f32> = Vec::new();
 
@@ -132,13 +130,4 @@ impl AudioManager {
             );
         } else { None };
     }
-}
-
-struct AudioFrame {
-    data: Arc<Vec<f32>>,
-}
-
-pub struct AudioEncodedFrame {
-    pub(crate) bytes: Bytes,
-    pub(crate) duration: Duration,
 }
