@@ -23,10 +23,6 @@ bytes = "1.9"
 chrono = "0.4"
 clap = "4.3.0"
 flume = "0.11"
-base64 = "0.22"
-uuid = { version = "1.10", features = ["v4" ]}
 cpal = "0.15"
 opus = "0.3"
-ogg = "0.9.0"
-
-hound = "3.5"
+uuid = { version = "1.10", features = ["v4"] }

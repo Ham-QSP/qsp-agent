@@ -40,6 +40,7 @@ pub struct SignalingServerSession {
     agent_description: Arc<AgentDescription>,
 }
 
+#[derive(Clone)]
 pub struct SignalingServerManager {
     agent_description: Arc<AgentDescription>,
     webrtc_session_manager: Arc<WebrtcSessionManager>,

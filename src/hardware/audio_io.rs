@@ -12,26 +12,44 @@ General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
-
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::thread;
 use tokio::time::Duration;
 
+use crate::audio::{AudioEncodedFrame, AudioFrame};
 use bytes::Bytes;
-use cpal::{ SampleFormat, SampleRate, SupportedStreamConfig, SupportedStreamConfigRange};
-use cpal::Stream;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::Stream;
+use cpal::{SampleFormat, SampleRate, SupportedStreamConfig, SupportedStreamConfigRange};
 use flume::Receiver;
 use log::{debug, info};
-use crate::audio::{AudioEncodedFrame, AudioFrame};
 
-pub struct AudioManager {}
+pub struct AudioSessionManager {
+    session: Option<AudioSession>,
+}
 
-impl AudioManager {
+impl AudioSessionManager {
     pub fn new() -> Self {
-        Self {}
+        Self { session: None }
     }
-    pub fn start(self) -> (Stream, Receiver<AudioEncodedFrame>) {
+
+    pub fn get_audio_receiver(&mut self) -> Receiver<AudioEncodedFrame> {
+        if self.session.is_none() {
+            self.session = Some(AudioSession::new())
+        }
+        let audio_session = &self.session.as_ref().unwrap();
+        return audio_session.encoded_receiver.clone();
+    }
+}
+
+#[derive(Clone)]
+pub struct AudioSession {
+    stream: Arc<Stream>,
+    pub encoded_receiver: Receiver<AudioEncodedFrame>,
+}
+
+impl AudioSession {
+    pub fn new() -> Self {
         let (sender, frame_receiver) = flume::bounded::<AudioFrame>(3);
         let (encoded_sender, encoded_receiver) = flume::bounded::<AudioEncodedFrame>(3);
 
@@ -39,8 +57,9 @@ impl AudioManager {
             // We just handle 48khz, to handle other sample rates like 44.1khz you need to use a resampler.
             let mut encoder =
                 opus::Encoder::new(48000, opus::Channels::Mono, opus::Application::Voip).unwrap();
-
+            debug!("Start audio encoder");
             loop {
+                println!("R");
                 let AudioFrame { data } = frame_receiver.recv().unwrap();
 
                 let sample_count = data.len() as u64;
@@ -60,7 +79,8 @@ impl AudioManager {
         let host = cpal::default_host();
 
         // Set up the input device and stream with the default input config.
-        let device = host.default_input_device()
+        let device = host
+            .default_input_device()
             .expect("failed to find input device");
 
         info!("Audio input device: {}", device.name().unwrap());
@@ -72,10 +92,9 @@ impl AudioManager {
                 Vec::new()
             }
         };
-        let config = AudioManager::find_audio_config(input_configs).unwrap();
+        let config = AudioSession::find_audio_config(input_configs).unwrap();
 
         debug!("Audio default input config: {:?}", config);
-
 
         let err_fn = move |err| {
             eprintln!("an error occurred on stream: {}", err);
@@ -93,6 +112,7 @@ impl AudioManager {
                     for &sample in data {
                         buffer.push(sample.clone());
                         if buffer.len() == 960 {
+                            println!("S");
                             sender
                                 .send(AudioFrame {
                                     data: Arc::new(buffer.to_owned()),
@@ -109,25 +129,36 @@ impl AudioManager {
             .unwrap();
 
         stream.play().unwrap();
-        return (stream, encoded_receiver);
+        //self.stream = Some(Rc::new(stream));
+        //encoded_receiver
+        let s = Self {
+            stream: Arc::new(stream),
+            encoded_receiver,
+        };
+        return s;
     }
 
-    fn find_audio_config(configs: Vec<SupportedStreamConfigRange>) -> Option<SupportedStreamConfig> {
+    fn find_audio_config(
+        configs: Vec<SupportedStreamConfigRange>,
+    ) -> Option<SupportedStreamConfig> {
         return if !configs.is_empty() {
-            let configs = configs.into_iter()
-                .filter(|c| {
-                    return c.min_sample_rate().0 <= 48000
-                        && c.max_sample_rate().0 >= 48000
-                        && c.sample_format() == SampleFormat::F32
-                        && c.channels() == 1;
-                });
+            let configs = configs.into_iter().filter(|c| {
+                return c.min_sample_rate().0 <= 48000
+                    && c.max_sample_rate().0 >= 48000
+                    && c.sample_format() == SampleFormat::F32
+                    && c.channels() == 1;
+            });
             let x: Vec<SupportedStreamConfigRange> = configs.collect();
-            return x.first().map(|range|
-                SupportedStreamConfig::new(1,
-                                           SampleRate(48000),
-                                           range.buffer_size().clone(),
-                                           SampleFormat::F32)
-            );
-        } else { None };
+            return x.first().map(|range| {
+                SupportedStreamConfig::new(
+                    1,
+                    SampleRate(48000),
+                    range.buffer_size().clone(),
+                    SampleFormat::F32,
+                )
+            });
+        } else {
+            None
+        };
     }
 }

@@ -129,7 +129,7 @@ pub async fn start_session(client_sdp: String, encoded_receiver: Receiver<AudioE
     // This will notify you when the peer has connected/disconnected
     peer_connection
         .on_ice_connection_state_change(Box::new(move |connection_state: RTCIceConnectionState| {
-            info!("Connection State has changed {}", connection_state);
+            info!("Ice Connection State has changed {}", connection_state);
             if connection_state == RTCIceConnectionState::Connected {
                 notify_tx.notify_waiters();
             }
@@ -142,7 +142,8 @@ pub async fn start_session(client_sdp: String, encoded_receiver: Receiver<AudioE
     peer_connection
         .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
             info!("Peer Connection State has changed: {}", s);
-
+            //TODO detect Peer Connection State has changed: disconnected
+            // Remove session
             if s == RTCPeerConnectionState::Failed {
                 // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
