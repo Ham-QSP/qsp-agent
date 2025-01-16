@@ -33,7 +33,7 @@ async fn main() {
     env_logger::init();
 
     let audio_session_manager = Arc::new(Mutex::new(AudioSessionManager::new()));
-    let webrtc_session_manager = Arc::new(WebrtcSessionManager::new(audio_session_manager.lock().unwrap().get_audio_receiver()));
+    let webrtc_session_manager = Arc::new(WebrtcSessionManager::new(audio_session_manager));
 
     let connect_addr = env::args()
         .nth(1)

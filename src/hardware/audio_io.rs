@@ -38,7 +38,8 @@ impl AudioSessionManager {
             self.session = Some(AudioSession::new())
         }
         let audio_session = &self.session.as_ref().unwrap();
-        return audio_session.encoded_receiver.clone();
+
+        audio_session.encoded_receiver.clone()
     }
 }
 
@@ -59,7 +60,6 @@ impl AudioSession {
                 opus::Encoder::new(48000, opus::Channels::Mono, opus::Application::Voip).unwrap();
             debug!("Start audio encoder");
             loop {
-                println!("R");
                 let AudioFrame { data } = frame_receiver.recv().unwrap();
 
                 let sample_count = data.len() as u64;
@@ -112,7 +112,6 @@ impl AudioSession {
                     for &sample in data {
                         buffer.push(sample.clone());
                         if buffer.len() == 960 {
-                            println!("S");
                             sender
                                 .send(AudioFrame {
                                     data: Arc::new(buffer.to_owned()),

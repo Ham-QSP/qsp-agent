@@ -34,15 +34,15 @@ pub struct WebrtcSession {
 pub struct WebrtcSessionManager {
     sessions: Mutex<Vec<WebrtcSession>>,
     encoded_receiver: Receiver<AudioEncodedFrame>,
-    //session_manager: Arc<Mutex<AudioSessionManager>>,
+    session_manager: Arc<Mutex<AudioSessionManager>>,
 }
 
 impl WebrtcSessionManager {
-    pub fn new(encoded_receiver: Receiver<AudioEncodedFrame>) -> Self {
+    pub fn new(session_manager: Arc<Mutex<AudioSessionManager>>) -> Self {
         Self {
             sessions: Mutex::new(Vec::new()),
-            //session_manager: session_manager.clone(),
-            encoded_receiver //: session_manager.lock().unwrap().get_audio_receiver(),
+            session_manager: session_manager.clone(),
+            encoded_receiver : session_manager.lock().unwrap().get_audio_receiver(),
         }
     }
 

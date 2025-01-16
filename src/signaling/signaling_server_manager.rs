@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 
 use anyhow::Result;
 use std::sync::Arc;
-use log::{debug, info};
+use log::{debug, error, info};
 
 use futures_util::{future, pin_mut, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
@@ -60,8 +60,11 @@ impl SignalingServerManager {
         }
     }
     pub async fn start(self, url: String) {
-        let connection = tokio::spawn(self.connect(url));
-        connection.await.expect("An error occur in session management").expect("TODO: panic message");
+        if let Err(e) = self.connect(url).await {
+            match e {
+                err => error!("Error processing connection: {}", err),
+            }
+        }
     }
 
     async fn connect(self, url: String) -> Result<(), SignalingServerError> {

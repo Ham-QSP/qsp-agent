@@ -107,7 +107,7 @@ pub async fn start_session(client_sdp: String, encoded_receiver: Receiver<AudioE
         // Wait for connection established
         let _ = notify_audio.notified().await;
 
-        println!("send the audio from the encoder");
+        println!("Send the audio from the encoder");
 
         while let Ok(frame) = encoded_receiver.recv_async().await {
             // frame
@@ -119,6 +119,7 @@ pub async fn start_session(client_sdp: String, encoded_receiver: Receiver<AudioE
                 })
                 .await?;
         }
+        println!("After while sending the audio");
 
         Result::<()>::Ok(())
     });
