@@ -31,12 +31,20 @@ pub enum AgentSocketMessage {
         #[serde(rename = "errorMessage")]
         error_message: String,
         #[serde(rename = "exchangeId")]
-        exchange_id: u32,
+        exchange_id: Option<u32>,
     },
     #[serde(rename = "CLIENT_INIT")]
-    ClientInitMessage { data: ClientInitPayload },
+    ClientInitMessage {
+        data: ClientInitPayload,
+        #[serde(rename = "exchangeId")]
+        exchange_id: u32
+    },
     #[serde(rename = "INIT_RESPONSE")]
-    ClientInitResponseMessage { data: ClientInitResponsePayload },
+    ClientInitResponseMessage {
+        data: ClientInitResponsePayload,
+        #[serde(rename = "exchangeId")]
+        exchange_id: u32
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -73,6 +81,8 @@ pub struct ClientInitPayload {
 #[derive(Serialize, Deserialize)]
 pub struct ClientInitResponsePayload {
     pub sdp: String,
+    #[serde(rename = "agentSessionUuid")]
+    pub agent_session_uuid: Arc<String>
 }
 
 pub fn decode_agent_message(message_str: String) -> AgentSocketMessage {

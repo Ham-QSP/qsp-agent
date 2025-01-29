@@ -13,24 +13,34 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
-use std::env;
-
-use crate::signaling::signaling_server_connection::SignalingServerManager;
-
+mod audio;
 mod signaling;
+mod webrtc;
+mod hardware;
+
+use crate::hardware::audio_io::AudioSessionManager;
+use std::env;
+use std::sync::{Arc, Mutex};
+
+use crate::signaling::signaling_server_manager::SignalingServerManager;
+use crate::webrtc::webrtc_session::WebrtcSessionManager;
 
 const APPLICATION_VERSION: &'static str = "0.1.0";
-const AGENT_TYPE_NAME: &'static str = "F4FEZ Agent";
+const AGENT_TYPE_NAME: &'static str = "QSP Agent";
 
 #[tokio::main]
 async fn main() {
     env_logger::init();
+    console_subscriber::init();
 
-    let connect_addr =
-        env::args().nth(1).unwrap_or_else(|| panic!("this program requires as argument the signaling server url"));
+    let audio_session_manager = Arc::new(Mutex::new(AudioSessionManager::new()));
+    let webrtc_session_manager = Arc::new(WebrtcSessionManager::new(audio_session_manager));
 
-    let url = url::Url::parse(&connect_addr).unwrap();
+    let connect_addr = env::args()
+        .nth(1)
+        .unwrap_or_else(|| panic!("this program requires as argument the signaling server url"));
 
-    let signal_server_session = SignalingServerManager::new();
-    signal_server_session.start(url).await;
+    let signal_server_session = SignalingServerManager::new(webrtc_session_manager.clone());
+    signal_server_session.start(connect_addr).await;
+
 }

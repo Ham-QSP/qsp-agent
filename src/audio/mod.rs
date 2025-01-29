@@ -13,6 +13,16 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
-mod message_decoder;
-pub mod signaling_server_manager;
+use std::sync::Arc;
 
+use bytes::Bytes;
+use tokio::time::Duration;
+
+pub struct AudioFrame {
+    pub(crate) data: Arc<Vec<f32>>,
+}
+
+pub struct AudioEncodedFrame {
+    pub bytes: Bytes,
+    pub duration: Duration,
+}
