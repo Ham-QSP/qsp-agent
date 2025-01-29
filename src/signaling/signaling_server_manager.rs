@@ -78,14 +78,14 @@ impl SignalingServerManager {
         let receive_from_ws = {
             read.for_each(|message| async {
                 let msg_str = message.expect("error message");
-                let msg = decode_agent_message(msg_str.into_text().expect("Deserialization error"));
+                let msg = decode_agent_message(msg_str.into_text().expect("Deserialization error").to_string());
                 let tx_message = SignalingServerManager::process_message(
                     self.webrtc_session_manager.clone(),
                     session.clone(),
                     msg).await.unwrap();
                 if let Some(tx_message) = tx_message {
                     let tx_message_str = serde_json::to_string(&tx_message).expect("Serialization error");
-                    send_tx.unbounded_send(Message::Text(tx_message_str)).expect("Can't send message");
+                    send_tx.unbounded_send(Message::Text(tx_message_str.into())).expect("Can't send message");
                 }
             })
         };
@@ -109,12 +109,13 @@ impl SignalingServerManager {
                 info!("Got server hello. Server name is '{}'", data.server_name);
                 Ok(Some(AgentSocketMessage::AgentHello { data: session.agent_description.clone() }))
             }
-            AgentSocketMessage::ClientInitMessage { data } => {
+            AgentSocketMessage::ClientInitMessage { data, exchange_id } => {
                 info!("Received client init");
                 let (agent_sdp, uuid) = webrtc_session_manager.add_session( data.sdp).await?;
                 debug!("Client init complete. Send client init response with uuid={}", uuid);
                 Ok(Some(AgentSocketMessage::ClientInitResponseMessage {
-                    data: ClientInitResponsePayload { sdp: agent_sdp.to_string(), agent_session_uuid: uuid }
+                    data: ClientInitResponsePayload { sdp: agent_sdp.to_string(), agent_session_uuid: uuid },
+                    exchange_id,
                 }))
             }
             _ => {
@@ -122,7 +123,7 @@ impl SignalingServerManager {
                 Ok(Some(AgentSocketMessage::ErrorMessage {
                     error_code: 102,
                     error_message: "Agent received invalid command name".to_string(),
-                    exchange_id: 0,
+                    exchange_id: Some(0),
                 }))
             }
         }

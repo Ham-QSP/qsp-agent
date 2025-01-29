@@ -13,33 +13,34 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
-
-use std::sync::Arc;
-
 use anyhow::Result;
-use flume::Receiver;
+use flume::{Receiver};
 use log::{debug, error, info};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tokio::sync::Notify;
-use webrtc::api::APIBuilder;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS};
+use webrtc::api::APIBuilder;
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
 use webrtc::media::Sample;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use webrtc::track::track_local::TrackLocal;
 
 use crate::audio::AudioEncodedFrame;
 
-pub async fn start_session(client_sdp: String, encoded_receiver: Receiver<AudioEncodedFrame>)
-                           -> Result<(Arc<RTCPeerConnection>, Box<String>)> {
-
+pub async fn start_session(
+    client_sdp: String,
+    encoded_receiver: Receiver<AudioEncodedFrame>,
+) -> Result<(Arc<RTCPeerConnection>, Box<String>)> {
+    debug!("Starting webRTC session");
     // Create a MediaEngine object to configure the supported codec
     let mut m = MediaEngine::default();
 
@@ -92,34 +93,54 @@ pub async fn start_session(client_sdp: String, encoded_receiver: Receiver<AudioE
         .add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal + Send + Sync>)
         .await?;
 
+    let connected = Arc::new(AtomicBool::new(true));
     // Read incoming RTCP packets
     // Before these packets are returned they are processed by interceptors. For things
     // like NACK this needs to be called.
-    tokio::spawn(async move {
+    let connected_rtcp_reader = connected.clone();
+    tokio::task::Builder::new()
+        .name("RTCP Reader")
+        .spawn(async move {
         let mut rtcp_buf = vec![0u8; 1500];
-        while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
-        Result::<()>::Ok(())
+        debug!("Start thread: RTCP reader");
+        while connected_rtcp_reader.load(Ordering::Relaxed) {
+            match rtp_sender.read(&mut rtcp_buf).await {
+                Ok(_size) => {}
+                Err(e) => {
+                    error!("RTCP send thread error: {}", e);
+                    break;
+                }
+            }
+        }
+        debug!("End thread: RTCP reader");
     });
 
-
     // SENDER
-    tokio::spawn(async move {
+    let connected_sender = connected.clone();
+    tokio::task::Builder::new()
+        .name("Audio sender")
+        .spawn(async move {
         // Wait for connection established
         let _ = notify_audio.notified().await;
 
-        println!("Send the audio from the encoder");
-
-        while let Ok(frame) = encoded_receiver.recv_async().await {
-            // frame
-            audio_track
-                .write_sample(&Sample {
-                    data: frame.bytes,
-                    duration: frame.duration,
-                    ..Default::default()
-                })
-                .await?;
+        debug!("Start thread : Send the audio from the encoder");
+        while connected_sender.load(Ordering::Relaxed) {
+            match encoded_receiver.recv_async().await {
+                Ok(frame) => {
+                    audio_track
+                        .write_sample(&Sample {
+                            data: frame.bytes,
+                            duration: frame.duration,
+                            ..Default::default()
+                        })
+                        .await?;
+                }
+                Err(_) => {
+                    break;
+                }
+            }
         }
-        println!("After while sending the audio");
+        debug!("End send audio thread");
 
         Result::<()>::Ok(())
     });
@@ -128,34 +149,33 @@ pub async fn start_session(client_sdp: String, encoded_receiver: Receiver<AudioE
 
     // Set the handler for ICE connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_ice_connection_state_change(Box::new(move |connection_state: RTCIceConnectionState| {
+    peer_connection.on_ice_connection_state_change(Box::new(
+        move |connection_state: RTCIceConnectionState| {
             info!("Ice Connection State has changed {}", connection_state);
             if connection_state == RTCIceConnectionState::Connected {
                 notify_tx.notify_waiters();
             }
             Box::pin(async {})
-        }))
-    ;
+        },
+    ));
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            info!("Peer Connection State has changed: {}", s);
-            //TODO detect Peer Connection State has changed: disconnected
-            // Remove session
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                info!("Peer Connection has gone to failed exiting");
-                // let _ = done_tx.try_send(());
-            }
+    let connected_store = connected.clone();
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        debug!("Peer Connection State has changed: {}", s);
+        // Remove session
+            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+            info!("Peer Connection has gone to failed exiting");
+        if s == RTCPeerConnectionState::Failed {
+            // let _ = done_tx.try_send(());
+            connected_store.store(false, Ordering::Relaxed);
+        }
 
-            Box::pin(async {})
-        }))
-    ;
+        Box::pin(async {})
+    }));
 
     // Wait for the offer to be pasted
     let offer = RTCSessionDescription::offer(client_sdp).unwrap();
@@ -178,11 +198,12 @@ pub async fn start_session(client_sdp: String, encoded_receiver: Receiver<AudioE
     // Block until ICE Gathering is complete, disabling trickle ICE
     // we do this because we only can exchange one signaling message
     // in a production application you should exchange ICE Candidates via OnICECandidate
+    //TODO Check this comment about OnIceCandidate
     let _ = gather_complete.recv().await;
     debug!("ICE gathering complete");
 
     let mut agent_sdp: Option<String> = Option::None;
-    // Output the answer in base64 so we can paste it in browser
+    // Get the answer to return to the server, then to the browser
     if let Some(local_desc) = peer_connection.local_description().await {
         agent_sdp = Some(local_desc.sdp);
     } else {

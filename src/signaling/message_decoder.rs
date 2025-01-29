@@ -31,12 +31,20 @@ pub enum AgentSocketMessage {
         #[serde(rename = "errorMessage")]
         error_message: String,
         #[serde(rename = "exchangeId")]
-        exchange_id: u32,
+        exchange_id: Option<u32>,
     },
     #[serde(rename = "CLIENT_INIT")]
-    ClientInitMessage { data: ClientInitPayload },
+    ClientInitMessage {
+        data: ClientInitPayload,
+        #[serde(rename = "exchangeId")]
+        exchange_id: u32
+    },
     #[serde(rename = "INIT_RESPONSE")]
-    ClientInitResponseMessage { data: ClientInitResponsePayload },
+    ClientInitResponseMessage {
+        data: ClientInitResponsePayload,
+        #[serde(rename = "exchangeId")]
+        exchange_id: u32
+    },
 }
 
 #[derive(Serialize, Deserialize)]

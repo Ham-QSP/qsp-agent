@@ -31,6 +31,7 @@ const AGENT_TYPE_NAME: &'static str = "QSP Agent";
 #[tokio::main]
 async fn main() {
     env_logger::init();
+    console_subscriber::init();
 
     let audio_session_manager = Arc::new(Mutex::new(AudioSessionManager::new()));
     let webrtc_session_manager = Arc::new(WebrtcSessionManager::new(audio_session_manager));
