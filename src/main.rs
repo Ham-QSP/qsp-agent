@@ -17,13 +17,17 @@ mod audio;
 mod signaling;
 mod webrtc;
 mod hardware;
+mod configuration;
+mod command_line;
 
 use crate::hardware::audio_io::AudioSessionManager;
-use std::env;
 use std::sync::{Arc, Mutex};
-
+use log::error;
+use crate::configuration::Configuration;
 use crate::signaling::signaling_server_manager::SignalingServerManager;
 use crate::webrtc::webrtc_session::WebrtcSessionManager;
+use clap::Parser;
+
 
 const APPLICATION_VERSION: &'static str = "0.1.0";
 const AGENT_TYPE_NAME: &'static str = "QSP Agent";
@@ -33,14 +37,24 @@ async fn main() {
     env_logger::init();
     console_subscriber::init();
 
+    let cli = command_line::Cli::parse();
+    
+    let config_path = cli.config.unwrap_or("config.toml".parse().unwrap());
+    
+    match configuration::load_config(config_path) {
+        Ok(config) => {
+            start_server(config).await;
+        }
+        Err(e) => error!("Failed to load configuration: {}", e),
+    }
+
+}
+
+async fn start_server(config: Configuration) {
     let audio_session_manager = Arc::new(Mutex::new(AudioSessionManager::new()));
     let webrtc_session_manager = Arc::new(WebrtcSessionManager::new(audio_session_manager));
 
-    let connect_addr = env::args()
-        .nth(1)
-        .unwrap_or_else(|| panic!("this program requires as argument the signaling server url"));
-
     let signal_server_session = SignalingServerManager::new(webrtc_session_manager.clone());
-    signal_server_session.start(connect_addr).await;
 
+    signal_server_session.start(config.signaling_server.url).await;
 }
