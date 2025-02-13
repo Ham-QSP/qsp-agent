@@ -54,7 +54,7 @@ async fn start_server(config: Configuration) {
     let audio_session_manager = Arc::new(Mutex::new(AudioSessionManager::new()));
     let webrtc_session_manager = Arc::new(WebrtcSessionManager::new(audio_session_manager));
 
-    let signal_server_session = SignalingServerManager::new(webrtc_session_manager.clone());
+    let signal_server_session = SignalingServerManager::new(config.clone(), webrtc_session_manager.clone());
 
     signal_server_session.start(config.signaling_server.url).await;
 }
