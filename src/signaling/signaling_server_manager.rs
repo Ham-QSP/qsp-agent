@@ -22,6 +22,7 @@ use futures_util::{future, pin_mut, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use crate::{AGENT_TYPE_NAME, APPLICATION_VERSION};
+use crate::configuration::Configuration;
 use crate::signaling::message_decoder::{AgentDescription, AgentSocketMessage, ClientInitResponsePayload, decode_agent_message};
 use crate::webrtc::webrtc_session::{WebrtcSessionManager};
 
@@ -47,14 +48,17 @@ pub struct SignalingServerManager {
 }
 
 impl SignalingServerManager {
-    pub fn new(webrtc_session_manager: Arc<WebrtcSessionManager>) -> Self {
+    pub fn new(config: Configuration, webrtc_session_manager: Arc<WebrtcSessionManager>) -> Self {
         Self {
             agent_description: Arc::new(AgentDescription {
                 agent_type: Arc::new(AGENT_TYPE_NAME.to_string()),
                 version: Arc::new(APPLICATION_VERSION.to_string()),
                 protocol_major_version: PROTOCOL_VERSION_MAJOR,
                 protocol_minor_version: PROTOCOL_VERSION_MINOR,
-                agent_name: Arc::new("Agent in development".to_string()),
+                agent_name: Arc::new(config.name),
+                description: Arc::new(config.description),
+                agent_id: Arc::new(config.signaling_server.agent_id),
+                agent_secret: Arc::new(config.signaling_server.agent_secret),
             }),
             webrtc_session_manager
         }

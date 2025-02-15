@@ -71,6 +71,11 @@ pub struct AgentDescription {
     pub protocol_minor_version: i32,
     #[serde(rename = "agentName")]
     pub agent_name: Arc<String>,
+    pub description: Arc<String>,
+    #[serde(rename = "agentId")]
+    pub agent_id: Arc<String>,
+    #[serde(rename = "agentSecret")]
+    pub agent_secret: Arc<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -86,6 +91,6 @@ pub struct ClientInitResponsePayload {
 }
 
 pub fn decode_agent_message(message_str: String) -> AgentSocketMessage {
-    return serde_json::from_str(&*message_str).expect("Can't decode agent message");
+    serde_json::from_str(&*message_str).expect("Can't decode agent message")
 }
 

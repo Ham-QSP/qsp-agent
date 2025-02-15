@@ -17,16 +17,20 @@ use serde::Deserialize;
 use std::fs;
 use std::path::Path;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Configuration {
     pub name: String,
     pub description: String,
     pub signaling_server: SignalingServer,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct SignalingServer {
     pub url: String,
+    #[serde(rename = "agentId")]
+    pub agent_id: String,
+    #[serde(rename = "agentSecret")]
+    pub agent_secret: String
 }
 
 
