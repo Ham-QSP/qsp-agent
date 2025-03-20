@@ -12,5 +12,23 @@ General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
+use hamlib::rig::{Hamlib, Rig};
+use log::debug;
+use crate::configuration::Configuration;
+use crate::hardware::error::IOError;
 
-pub mod audio_io;
+pub struct TransceiverManager {
+    hamlib: Hamlib,
+    rig: Rig,
+}
+
+impl TransceiverManager {
+    pub fn new(configuration: Configuration) -> Result<TransceiverManager, IOError> {
+        debug!("Hamlib init");
+        let mut hamlib = Hamlib::new();
+
+        let rig = hamlib.rig_connect(configuration.transceiver.rig_model).map_err(|e| IOError { message: e.message.to_string() })?;
+        Ok(TransceiverManager { hamlib, rig })
+        
+    }
+}
