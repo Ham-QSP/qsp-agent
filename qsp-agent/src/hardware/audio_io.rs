@@ -22,7 +22,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::Stream;
 use cpal::{SampleFormat, SampleRate, SupportedStreamConfig, SupportedStreamConfigRange};
 use flume::Receiver;
-use log::{debug, info};
+use log::{debug, error, info};
 
 pub struct AudioSessionManager {
     session: Option<AudioSession>,
@@ -157,6 +157,7 @@ impl AudioSession {
                 )
             });
         } else {
+            error!("No supported audio configs found");
             None
         };
     }

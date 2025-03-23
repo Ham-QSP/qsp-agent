@@ -51,7 +51,7 @@ async fn main() {
 }
 
 async fn start_server(config: Configuration) {
-    let transceiver_manager = hardware::hamlib::TransceiverManager::new(config.clone()).unwrap();
+    let transceiver_manager = hardware::transceiver::transceiver_manager::TransceiverManager::new(config.clone()).unwrap();
     
     let audio_session_manager = Arc::new(Mutex::new(AudioSessionManager::new()));
     let webrtc_session_manager = Arc::new(WebrtcSessionManager::new(audio_session_manager));

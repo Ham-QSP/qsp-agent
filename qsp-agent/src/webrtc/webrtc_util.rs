@@ -18,10 +18,13 @@ use flume::{Receiver};
 use log::{debug, error, info};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Notify;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS};
 use webrtc::api::APIBuilder;
+use webrtc::data_channel::data_channel_message::DataChannelMessage;
+use webrtc::data_channel::RTCDataChannel;
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
@@ -29,7 +32,7 @@ use webrtc::media::Sample;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::peer_connection::RTCPeerConnection;
+use webrtc::peer_connection::{math_rand_alpha, RTCPeerConnection};
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use webrtc::track::track_local::TrackLocal;
@@ -179,6 +182,50 @@ pub async fn start_session(
 
     // Wait for the offer to be pasted
     let offer = RTCSessionDescription::offer(client_sdp).unwrap();
+
+    peer_connection.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+        let d_label = d.label().to_owned();
+        let d_id = d.id();
+        debug!("New DataChannel {d_label} {d_id}");
+
+        // Register channel opening handling
+        Box::pin(async move {
+            let d2 = Arc::clone(&d);
+            let d_label2 = d_label.clone();
+            let d_id2 = d_id;
+            d.on_close(Box::new(move || {
+                debug!("Data channel closed");
+                Box::pin(async {})
+            }));
+
+            d.on_open(Box::new(move || {
+                debug!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
+
+                Box::pin(async move {
+                    let mut result = Result::<usize>::Ok(0);
+                    while result.is_ok() {
+                        let timeout = tokio::time::sleep(Duration::from_secs(5));
+                        tokio::pin!(timeout);
+
+                        tokio::select! {
+                                _ = timeout.as_mut() =>{
+                                    let message = math_rand_alpha(15);
+                                    debug!("Sending '{message}'");
+                                    result = d2.send_text(message).await.map_err(Into::into);
+                                }
+                            };
+                    }
+                })
+            }));
+
+            // Register text message handling
+            d.on_message(Box::new(move |msg: DataChannelMessage| {
+                let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+                debug!("Message from DataChannel '{d_label}': '{msg_str}'");
+                Box::pin(async {})
+            }));
+        })
+    }));
     debug!("client SDP offer created");
     // Set the remote SessionDescription
     peer_connection.set_remote_description(offer).await?;
