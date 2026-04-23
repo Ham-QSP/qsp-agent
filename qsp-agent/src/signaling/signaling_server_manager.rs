@@ -72,17 +72,25 @@ impl SignalingServerManager {
     }
 
     async fn connect(self, url: String) -> Result<(), SignalingServerError> {
+        debug!("Connecting the signaling server '{}'...", url);
         let (ws_stream, _) = connect_async(&url).await?;
+        debug!("WebSocket connection established");
         let (write, read) = ws_stream.split();
-
         let session = Arc::new(SignalingServerManager::create_session(self.agent_description.clone()));
         let (send_tx, send_rx) = futures_channel::mpsc::unbounded();
         let send_to_ws = send_rx.map(Ok).forward(write);
 
         let receive_from_ws = {
             read.for_each(|message| async {
-                let msg_str = message.expect("error message");
-                let msg = decode_agent_message(msg_str.into_text().expect("Deserialization error").to_string());
+                let msg_str = message.expect("Can't receive message");
+                debug!("Received message: {}", msg_str);
+                let msg = match decode_agent_message(msg_str.into_text().expect("Can't extract message as text").to_string()) {
+                    Ok(msg) => msg,
+                    Err(err) => {
+                        error!("Failed to decode signaling server message: {}", err);
+                        return;
+                    }
+                };
                 let tx_message = SignalingServerManager::process_message(
                     self.webrtc_session_manager.clone(),
                     session.clone(),
