@@ -13,13 +13,13 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
-use crate::configuration::Configuration;
+use crate::configuration::{Configuration, HamlibDebugLevel as ConfigHamlibDebugLevel};
 use crate::hardware::error::IOError;
 use crate::hardware::transceiver::transceiver_state::TransceiverState;
+use hamlib::hamlib::{Hamlib, RigDebugLevel};
 use hamlib::rig::Rig;
 use log::{debug, error, info, trace, warn};
 use std::sync::Mutex;
-use hamlib::hamlib::{Hamlib, RigDebugLevel};
 
 pub struct TransceiverManager {
     hamlib: Hamlib,
@@ -45,6 +45,12 @@ impl TransceiverManager {
                 RigDebugLevel::Unknown(_) => debug!("hamlib: {}", message.trim_end()),
             }
         })));
+
+        if let Some(level) = configuration.transceiver.hamlib_debug_level {
+            let debug_level = level.into();
+            debug!("Hamlib debug level: {}", level);
+            Hamlib::rig_set_debug(debug_level);
+        }
 
         let rig = hamlib
             .rig_connect(configuration.transceiver.rig_model)
@@ -76,5 +82,19 @@ impl TransceiverManager {
     }
     pub fn get_state(&self) -> TransceiverState {
         self.state.lock().unwrap().clone()
+    }
+}
+
+impl From<ConfigHamlibDebugLevel> for RigDebugLevel {
+    fn from(level: ConfigHamlibDebugLevel) -> Self {
+        match level {
+            ConfigHamlibDebugLevel::None => RigDebugLevel::None,
+            ConfigHamlibDebugLevel::Bug => RigDebugLevel::Bug,
+            ConfigHamlibDebugLevel::Err => RigDebugLevel::Err,
+            ConfigHamlibDebugLevel::Warn => RigDebugLevel::Warn,
+            ConfigHamlibDebugLevel::Verbose => RigDebugLevel::Verbose,
+            ConfigHamlibDebugLevel::Trace => RigDebugLevel::Trace,
+            ConfigHamlibDebugLevel::Cache => RigDebugLevel::Cache,
+        }
     }
 }

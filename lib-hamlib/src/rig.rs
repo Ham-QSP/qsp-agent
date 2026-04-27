@@ -102,7 +102,7 @@ impl Rig {
         }
     }
 
-    pub fn get_freq(&self, vfo: u32) -> Result<freq_t, HamLibError> {
+    pub fn get_freq(&self, vfo: u32) -> Result<freq_t, HamLibError<'_>> {
         unsafe {
             let mut freq: freq_t = 0.0;
             let freq_ptr: *mut freq_t = &mut freq;
@@ -114,16 +114,4 @@ impl Rig {
             return Err(HamLibError::from_hamlib_error_code(ret));
         }
     }
-}
-
-unsafe extern "C" fn rig_set_freq_callback(
-    arg1: *mut RIG,
-    arg2: vfo_t,
-    arg3: freq_t,
-    arg4: *mut ::std::os::raw::c_void,
-) -> ::std::os::raw::c_int {
-    let callback: RigFreqCallback = core::mem::transmute(arg4);
-    callback();
-
-    1
 }

@@ -13,14 +13,14 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 mod errors;
+pub mod hamlib;
 mod hamlib_raw;
 pub mod rig;
-pub mod hamlib;
 
 #[cfg(test)]
 mod tests {
-    use crate::hamlib;
     use super::*;
+    use crate::hamlib;
 
     #[test]
     fn list_rigs() {

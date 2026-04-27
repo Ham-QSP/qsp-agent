@@ -1,11 +1,17 @@
+use crate::errors::HamLibError;
+use crate::hamlib_raw;
+use crate::hamlib_raw::{
+    rig_caps, rig_debug_level_e, rig_debug_level_e_RIG_DEBUG_BUG,
+    rig_debug_level_e_RIG_DEBUG_CACHE, rig_debug_level_e_RIG_DEBUG_ERR,
+    rig_debug_level_e_RIG_DEBUG_NONE, rig_debug_level_e_RIG_DEBUG_TRACE,
+    rig_debug_level_e_RIG_DEBUG_VERBOSE, rig_debug_level_e_RIG_DEBUG_WARN, rig_errcode_e_RIG_OK,
+    rig_load_all_backends,
+};
+use crate::rig::Rig;
 use std::ffi::{c_void, CStr};
 use std::os::raw::c_int;
 use std::ptr::null_mut;
 use std::sync::{Mutex, OnceLock};
-use crate::errors::HamLibError;
-use crate::{hamlib, hamlib_raw, rig};
-use crate::hamlib_raw::{rig_caps, rig_debug_level_e, rig_debug_level_e_RIG_DEBUG_BUG, rig_debug_level_e_RIG_DEBUG_CACHE, rig_debug_level_e_RIG_DEBUG_ERR, rig_debug_level_e_RIG_DEBUG_NONE, rig_debug_level_e_RIG_DEBUG_TRACE, rig_debug_level_e_RIG_DEBUG_VERBOSE, rig_debug_level_e_RIG_DEBUG_WARN, rig_errcode_e_RIG_OK, rig_load_all_backends};
-use crate::rig::Rig;
 
 pub struct RigCaps {
     pub rig_model: u32,
@@ -56,6 +62,21 @@ impl From<rig_debug_level_e> for RigDebugLevel {
             Self::Cache
         } else {
             Self::Unknown(level)
+        }
+    }
+}
+
+impl From<RigDebugLevel> for rig_debug_level_e {
+    fn from(level: RigDebugLevel) -> Self {
+        match level {
+            RigDebugLevel::None => rig_debug_level_e_RIG_DEBUG_NONE,
+            RigDebugLevel::Bug => rig_debug_level_e_RIG_DEBUG_BUG,
+            RigDebugLevel::Err => rig_debug_level_e_RIG_DEBUG_ERR,
+            RigDebugLevel::Warn => rig_debug_level_e_RIG_DEBUG_WARN,
+            RigDebugLevel::Verbose => rig_debug_level_e_RIG_DEBUG_VERBOSE,
+            RigDebugLevel::Trace => rig_debug_level_e_RIG_DEBUG_TRACE,
+            RigDebugLevel::Cache => rig_debug_level_e_RIG_DEBUG_CACHE,
+            RigDebugLevel::Unknown(level) => level,
         }
     }
 }
@@ -119,7 +140,6 @@ unsafe extern "C" {
     fn free(ptr: *mut c_void);
 }
 
-
 pub struct Hamlib {
     pub(crate) all_backends_loaded: bool,
 }
@@ -148,6 +168,12 @@ impl Hamlib {
         }
     }
 
+    pub fn rig_set_debug(level: RigDebugLevel) {
+        unsafe {
+            hamlib_raw::rig_set_debug(level.into());
+        }
+    }
+
     pub fn list_rigs(&mut self, callback: RigListCallbackFn) {
         if !self.all_backends_loaded {
             unsafe {
@@ -156,14 +182,11 @@ impl Hamlib {
             self.all_backends_loaded = true;
         }
         unsafe {
-            hamlib_raw::rig_list_foreach(
-                Some(list_rigs_callback),
-                core::mem::transmute(callback),
-            );
+            hamlib_raw::rig_list_foreach(Some(list_rigs_callback), core::mem::transmute(callback));
         }
     }
 
-    pub fn rig_connect(&mut self, rig_model: u32) -> Result<Rig, HamLibError> {
+    pub fn rig_connect(&mut self, rig_model: u32) -> Result<Rig, HamLibError<'_>> {
         unsafe {
             let rig = hamlib_raw::rig_init(rig_model);
             let open_result = hamlib_raw::rig_open(rig) as u32;
