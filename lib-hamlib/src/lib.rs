@@ -15,14 +15,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 mod errors;
 mod hamlib_raw;
 pub mod rig;
+pub mod hamlib;
 
 #[cfg(test)]
 mod tests {
+    use crate::hamlib;
     use super::*;
 
     #[test]
     fn list_rigs() {
-        let mut hamlib = rig::Hamlib::new();
+        let mut hamlib = hamlib::Hamlib::new();
         hamlib.list_rigs({
             |caps| {
                 println!(
@@ -35,14 +37,14 @@ mod tests {
 
     #[test]
     fn open_rig() {
-        let mut hamlib = rig::Hamlib::new();
+        let mut hamlib = hamlib::Hamlib::new();
         let rig = hamlib.rig_connect(1);
         assert!(rig.is_ok())
     }
 
     #[test]
     fn get_freq() {
-        let mut hamlib = rig::Hamlib::new();
+        let mut hamlib = hamlib::Hamlib::new();
         let rig = hamlib.rig_connect(1).unwrap();
         rig.set_freq(0, 100.0);
         let freq = rig.get_freq(0).unwrap();

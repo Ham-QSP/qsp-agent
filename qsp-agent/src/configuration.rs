@@ -42,7 +42,7 @@ pub struct Transceiver {
 
 
 pub(crate) fn load_config<P: AsRef<Path>>(path: P) -> Result<Configuration, Box<dyn std::error::Error>> {
-    let content = fs::read_to_string(path)?; // Charger le contenu du fichier
-    let config: Configuration = toml::from_str(&content)?; // Désérialiser le contenu TOML
+    let content = fs::read_to_string(path)?;
+    let config: Configuration = toml::from_str(&content)?;
     Ok(config)
 }

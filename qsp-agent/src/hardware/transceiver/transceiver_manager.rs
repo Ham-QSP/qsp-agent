@@ -13,12 +13,13 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
-use crate::configuration::{Configuration, Transceiver};
+use crate::configuration::Configuration;
 use crate::hardware::error::IOError;
 use crate::hardware::transceiver::transceiver_state::TransceiverState;
-use hamlib::rig::{Hamlib, Rig};
-use log::debug;
-use std::sync::{Arc, Mutex};
+use hamlib::rig::Rig;
+use log::{debug, error, info, trace, warn};
+use std::sync::Mutex;
+use hamlib::hamlib::{Hamlib, RigDebugLevel};
 
 pub struct TransceiverManager {
     hamlib: Hamlib,
@@ -30,13 +31,27 @@ impl TransceiverManager {
     pub fn new(configuration: Configuration) -> Result<TransceiverManager, IOError> {
         debug!("Hamlib init");
         let mut hamlib = Hamlib::new();
+        Hamlib::rig_set_debug_callback(Some(Box::new(|level: RigDebugLevel, message: &str| {
+            match level {
+                RigDebugLevel::None => trace!("hamlib: {}", message.trim_end()),
+                RigDebugLevel::Bug | RigDebugLevel::Err => {
+                    error!("hamlib: {}", message.trim_end())
+                }
+                RigDebugLevel::Warn => warn!("hamlib: {}", message.trim_end()),
+                RigDebugLevel::Verbose => info!("hamlib: {}", message.trim_end()),
+                RigDebugLevel::Trace | RigDebugLevel::Cache => {
+                    debug!("hamlib: {}", message.trim_end())
+                }
+                RigDebugLevel::Unknown(_) => debug!("hamlib: {}", message.trim_end()),
+            }
+        })));
 
         let rig = hamlib
             .rig_connect(configuration.transceiver.rig_model)
             .map_err(|e| IOError {
                 message: e.message.to_string(),
             })?;
-        
+
         let manager = TransceiverManager {
             hamlib,
             rig,
@@ -47,12 +62,16 @@ impl TransceiverManager {
     }
 
     pub fn full_state_update(&self) -> Result<(), IOError> {
-        let mut state  = self.state.lock().unwrap();
-        match self.rig.get_freq(0)  {
-            Ok(freq) => {state.mainVfoFreq = freq as u64}
-            Err(e) => { return Err(IOError { message: e.message.to_string() })}
+        let mut state = self.state.lock().unwrap();
+        match self.rig.get_freq(0) {
+            Ok(freq) => state.mainVfoFreq = freq as u64,
+            Err(e) => {
+                return Err(IOError {
+                    message: e.message.to_string(),
+                })
+            }
         };
-        
+
         Ok(())
     }
     pub fn get_state(&self) -> TransceiverState {
