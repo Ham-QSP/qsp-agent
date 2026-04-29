@@ -21,6 +21,7 @@ pub mod rig;
 mod tests {
     use super::*;
     use crate::hamlib;
+    use std::collections::HashMap;
 
     #[test]
     fn list_rigs() {
@@ -38,14 +39,14 @@ mod tests {
     #[test]
     fn open_rig() {
         let mut hamlib = hamlib::Hamlib::new();
-        let rig = hamlib.rig_connect(1);
+        let rig = hamlib.rig_connect(1, HashMap::new());
         assert!(rig.is_ok())
     }
 
     #[test]
     fn get_freq() {
         let mut hamlib = hamlib::Hamlib::new();
-        let rig = hamlib.rig_connect(1).unwrap();
+        let rig = hamlib.rig_connect(1, HashMap::new()).unwrap();
         rig.set_freq(0, 100.0);
         let freq = rig.get_freq(0).unwrap();
 

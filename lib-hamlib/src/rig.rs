@@ -13,14 +13,8 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 use crate::errors::HamLibError;
-use crate::hamlib_raw::{
-    freq_t
-
-
-    , rig_errcode_e_RIG_OK
-    , vfo_t, RIG,
-};
 use crate::hamlib_raw;
+use crate::hamlib_raw::{freq_t, rig_errcode_e_RIG_OK, vfo_t, RIG};
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::os::raw::{c_int, c_uint};

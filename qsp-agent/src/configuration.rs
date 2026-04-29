@@ -14,6 +14,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::Path;
@@ -41,6 +42,8 @@ pub struct Transceiver {
     pub rig_model: u32,
     #[serde(rename = "hamlibDebugLevel", default)]
     pub hamlib_debug_level: Option<HamlibDebugLevel>,
+    #[serde(default)]
+    pub port: HashMap<String, String>,
 }
 
 #[derive(Deserialize, Debug, Clone, Copy)]

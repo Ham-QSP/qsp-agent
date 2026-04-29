@@ -1,14 +1,15 @@
 use crate::errors::HamLibError;
 use crate::hamlib_raw;
 use crate::hamlib_raw::{
-    rig_caps, rig_debug_level_e, rig_debug_level_e_RIG_DEBUG_BUG,
+    hamlib_token_t, rig_caps, rig_debug_level_e, rig_debug_level_e_RIG_DEBUG_BUG,
     rig_debug_level_e_RIG_DEBUG_CACHE, rig_debug_level_e_RIG_DEBUG_ERR,
     rig_debug_level_e_RIG_DEBUG_NONE, rig_debug_level_e_RIG_DEBUG_TRACE,
     rig_debug_level_e_RIG_DEBUG_VERBOSE, rig_debug_level_e_RIG_DEBUG_WARN, rig_errcode_e_RIG_OK,
-    rig_load_all_backends,
+    rig_load_all_backends, RIG_CONF_END,
 };
 use crate::rig::Rig;
-use std::ffi::{c_void, CStr};
+use std::collections::HashMap;
+use std::ffi::{c_void, CStr, CString};
 use std::os::raw::c_int;
 use std::ptr::null_mut;
 use std::sync::{Mutex, OnceLock};
@@ -186,14 +187,54 @@ impl Hamlib {
         }
     }
 
-    pub fn rig_connect(&mut self, rig_model: u32) -> Result<Rig, HamLibError<'_>> {
+    pub fn rig_connect(
+        &mut self,
+        rig_model: u32,
+        config: HashMap<String, String>,
+    ) -> Result<Rig, HamLibError<'_>> {
         unsafe {
             let rig = hamlib_raw::rig_init(rig_model);
+            for (key, value) in config {
+                let token = rig_token_lookup(rig, &key)?;
+                rig_set_conf(rig, token, &value)?;
+            }
+
             let open_result = hamlib_raw::rig_open(rig) as u32;
             if open_result == rig_errcode_e_RIG_OK {
                 return Ok(Rig { rig });
             }
             Err(HamLibError::from_hamlib_error_code(open_result))
         }
+    }
+}
+
+unsafe fn rig_token_lookup<'a>(
+    rig: *mut hamlib_raw::RIG,
+    name: &str,
+) -> Result<hamlib_token_t, HamLibError<'a>> {
+    let name = CString::new(name).unwrap();
+    let token = unsafe { hamlib_raw::rig_token_lookup(rig, name.as_ptr()) };
+    if token == RIG_CONF_END as hamlib_token_t {
+        return Err(HamLibError {
+            error_code: RIG_CONF_END,
+            message: "unknown hamlib config token",
+        });
+    }
+
+    Ok(token)
+}
+
+unsafe fn rig_set_conf<'a>(
+    rig: *mut hamlib_raw::RIG,
+    token: hamlib_token_t,
+    value: &str,
+) -> Result<(), HamLibError<'a>> {
+    let value = CString::new(value).unwrap();
+    let result = unsafe { hamlib_raw::rig_set_conf(rig, token, value.as_ptr()) as u32 };
+
+    if result == rig_errcode_e_RIG_OK {
+        Ok(())
+    } else {
+        Err(HamLibError::from_hamlib_error_code(result))
     }
 }

@@ -22,7 +22,7 @@ pub struct HamLibError<'a> {
 
 impl<'a> HamLibError<'a> {
     pub(crate) fn from_hamlib_error_code(error_code: u32) -> HamLibError<'a> {
-        let char_ptr = unsafe {  crate::hamlib_raw::rigerror(error_code as c_int) };
+        let char_ptr = unsafe { crate::hamlib_raw::rigerror(error_code as c_int) };
         let str = unsafe { CStr::from_ptr(char_ptr) }.to_str().unwrap();
         HamLibError {
             error_code,

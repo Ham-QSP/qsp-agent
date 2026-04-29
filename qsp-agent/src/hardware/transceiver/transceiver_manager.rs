@@ -53,7 +53,10 @@ impl TransceiverManager {
         }
 
         let rig = hamlib
-            .rig_connect(configuration.transceiver.rig_model)
+            .rig_connect(
+                configuration.transceiver.rig_model,
+                configuration.transceiver.port.clone(),
+            )
             .map_err(|e| IOError {
                 message: e.message.to_string(),
             })?;
