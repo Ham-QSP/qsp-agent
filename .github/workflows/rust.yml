@@ -17,7 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install dependencies
-      run: sudo apt-get install -y librust-alsa-sys-dev
+      run: sudo apt-get install -y librust-alsa-sys-dev libhamlib-dev
     - name: Build
       run: cargo build --verbose
     - name: Run tests
