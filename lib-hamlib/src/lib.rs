@@ -19,7 +19,6 @@ pub mod rig;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::hamlib;
     use std::collections::HashMap;
 

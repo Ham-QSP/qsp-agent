@@ -15,4 +15,5 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 
 pub(crate) mod webrtc_session;
 mod webrtc_util;
+pub mod command_interpreter;
 

@@ -14,8 +14,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
 use anyhow::Result;
-use flume::{Receiver};
+use flume::Receiver;
 use log::{debug, error, info};
+use prost::Message;
+use qsp_proto_files::qsp::example::v1::{payload, AgentControlMessage};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -38,6 +40,7 @@ use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSampl
 use webrtc::track::track_local::TrackLocal;
 
 use crate::audio::AudioEncodedFrame;
+use crate::webrtc::command_interpreter::{CommandSession};
 
 pub async fn start_session(
     client_sdp: String,
@@ -104,49 +107,49 @@ pub async fn start_session(
     tokio::task::Builder::new()
         .name("RTCP Reader")
         .spawn(async move {
-        let mut rtcp_buf = vec![0u8; 1500];
-        debug!("Start thread: RTCP reader");
-        while connected_rtcp_reader.load(Ordering::Relaxed) {
-            match rtp_sender.read(&mut rtcp_buf).await {
-                Ok(_size) => {}
-                Err(e) => {
-                    error!("RTCP send thread error: {}", e);
-                    break;
+            let mut rtcp_buf = vec![0u8; 1500];
+            debug!("Start thread: RTCP reader");
+            while connected_rtcp_reader.load(Ordering::Relaxed) {
+                match rtp_sender.read(&mut rtcp_buf).await {
+                    Ok(_size) => {}
+                    Err(e) => {
+                        error!("RTCP send thread error: {}", e);
+                        break;
+                    }
                 }
             }
-        }
-        debug!("End thread: RTCP reader");
-    });
+            debug!("End thread: RTCP reader");
+        });
 
     // SENDER
     let connected_sender = connected.clone();
     tokio::task::Builder::new()
         .name("Audio sender")
         .spawn(async move {
-        // Wait for connection established
-        let _ = notify_audio.notified().await;
+            // Wait for connection established
+            let _ = notify_audio.notified().await;
 
-        debug!("Start thread : Send the audio from the encoder");
-        while connected_sender.load(Ordering::Relaxed) {
-            match encoded_receiver.recv_async().await {
-                Ok(frame) => {
-                    audio_track
-                        .write_sample(&Sample {
-                            data: frame.bytes,
-                            duration: frame.duration,
-                            ..Default::default()
-                        })
-                        .await?;
-                }
-                Err(_) => {
-                    break;
+            debug!("Start thread : Send the audio from the encoder");
+            while connected_sender.load(Ordering::Relaxed) {
+                match encoded_receiver.recv_async().await {
+                    Ok(frame) => {
+                        audio_track
+                            .write_sample(&Sample {
+                                data: frame.bytes,
+                                duration: frame.duration,
+                                ..Default::default()
+                            })
+                            .await?;
+                    }
+                    Err(_) => {
+                        break;
+                    }
                 }
             }
-        }
-        debug!("End send audio thread");
+            debug!("End send audio thread");
 
-        Result::<()>::Ok(())
-    });
+            Result::<()>::Ok(())
+        });
 
     debug!("Audio track created");
 
@@ -168,10 +171,10 @@ pub async fn start_session(
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
         debug!("Peer Connection State has changed: {}", s);
         // Remove session
-            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-            info!("Peer Connection has gone to failed exiting");
+        // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+        // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+        // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+        info!("Peer Connection has gone to failed exiting");
         if s == RTCPeerConnectionState::Failed {
             // let _ = done_tx.try_send(());
             connected_store.store(false, Ordering::Relaxed);
@@ -181,13 +184,14 @@ pub async fn start_session(
     }));
 
     // Wait for the offer to be pasted
-    let offer = RTCSessionDescription::offer(client_sdp).unwrap();
+    let offer = RTCSessionDescription::offer(client_sdp)?;
 
     peer_connection.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
         let d_label = d.label().to_owned();
         let d_id = d.id();
         debug!("New DataChannel {d_label} {d_id}");
-
+        let command_session = CommandSession::new();
+        //TODO Register session somewhere
         // Register channel opening handling
         Box::pin(async move {
             let d2 = Arc::clone(&d);
@@ -218,10 +222,19 @@ pub async fn start_session(
                 })
             }));
 
-            // Register text message handling
+            // Register protobuf message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
-                let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                debug!("Message from DataChannel '{d_label}': '{msg_str}'");
+                match AgentControlMessage::decode(msg.data) {
+                    Ok(message) => {
+                        command_session.command_received(&message);
+                    }
+                    Err(error) => {
+                        error!(
+                            "Failed to decode AgentControlMessage from DataChannel '{d_label}': {error}"
+                        );
+                    }
+                }
+
                 Box::pin(async {})
             }));
         })
