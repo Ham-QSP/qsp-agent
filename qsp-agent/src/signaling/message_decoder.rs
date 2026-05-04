@@ -38,13 +38,13 @@ pub enum AgentSocketMessage {
     ClientInitMessage {
         data: ClientInitPayload,
         #[serde(rename = "exchangeId")]
-        exchange_id: u32
+        exchange_id: u32,
     },
     #[serde(rename = "INIT_RESPONSE")]
     ClientInitResponseMessage {
         data: ClientInitResponsePayload,
         #[serde(rename = "exchangeId")]
-        exchange_id: u32
+        exchange_id: u32,
     },
 }
 
@@ -88,7 +88,7 @@ pub struct ClientInitPayload {
 pub struct ClientInitResponsePayload {
     pub sdp: String,
     #[serde(rename = "agentSessionUuid")]
-    pub agent_session_uuid: Arc<String>
+    pub agent_session_uuid: Arc<String>,
 }
 
 pub fn decode_agent_message(message_str: String) -> serde_json::Result<AgentSocketMessage> {

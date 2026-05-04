@@ -13,18 +13,19 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
-
 use anyhow::Result;
-use std::sync::Arc;
 use log::{debug, error, info};
+use std::sync::Arc;
 
 use futures_util::{future, pin_mut, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
-use crate::{AGENT_TYPE_NAME, APPLICATION_VERSION};
 use crate::configuration::Configuration;
-use crate::signaling::message_decoder::{AgentDescription, AgentSocketMessage, ClientInitResponsePayload, decode_agent_message};
-use crate::webrtc::webrtc_session::{WebrtcSessionManager};
+use crate::signaling::message_decoder::{
+    decode_agent_message, AgentDescription, AgentSocketMessage, ClientInitResponsePayload,
+};
+use crate::webrtc::webrtc_session_manager::WebrtcSessionManager;
+use crate::{AGENT_TYPE_NAME, APPLICATION_VERSION};
 
 const PROTOCOL_VERSION_MAJOR: i32 = 0;
 const PROTOCOL_VERSION_MINOR: i32 = 1;
@@ -60,7 +61,7 @@ impl SignalingServerManager {
                 agent_id: Arc::new(config.signaling_server.agent_id),
                 agent_secret: Arc::new(config.signaling_server.agent_secret),
             }),
-            webrtc_session_manager
+            webrtc_session_manager,
         }
     }
     pub async fn start(self, url: String) {
@@ -76,7 +77,9 @@ impl SignalingServerManager {
         let (ws_stream, _) = connect_async(&url).await?;
         debug!("WebSocket connection established");
         let (write, read) = ws_stream.split();
-        let session = Arc::new(SignalingServerManager::create_session(self.agent_description.clone()));
+        let session = Arc::new(SignalingServerManager::create_session(
+            self.agent_description.clone(),
+        ));
         let (send_tx, send_rx) = futures_channel::mpsc::unbounded();
         let send_to_ws = send_rx.map(Ok).forward(write);
 
@@ -84,7 +87,12 @@ impl SignalingServerManager {
             read.for_each(|message| async {
                 let msg_str = message.expect("Can't receive message");
                 debug!("Received message: {}", msg_str);
-                let msg = match decode_agent_message(msg_str.into_text().expect("Can't extract message as text").to_string()) {
+                let msg = match decode_agent_message(
+                    msg_str
+                        .into_text()
+                        .expect("Can't extract message as text")
+                        .to_string(),
+                ) {
                     Ok(msg) => msg,
                     Err(err) => {
                         error!("Failed to decode signaling server message: {}", err);
@@ -94,10 +102,16 @@ impl SignalingServerManager {
                 let tx_message = SignalingServerManager::process_message(
                     self.webrtc_session_manager.clone(),
                     session.clone(),
-                    msg).await.unwrap();
+                    msg,
+                )
+                .await
+                .unwrap();
                 if let Some(tx_message) = tx_message {
-                    let tx_message_str = serde_json::to_string(&tx_message).expect("Serialization error");
-                    send_tx.unbounded_send(Message::Text(tx_message_str.into())).expect("Can't send message");
+                    let tx_message_str =
+                        serde_json::to_string(&tx_message).expect("Serialization error");
+                    send_tx
+                        .unbounded_send(Message::Text(tx_message_str.into()))
+                        .expect("Can't send message");
                 }
             })
         };
@@ -112,21 +126,30 @@ impl SignalingServerManager {
         SignalingServerSession { agent_description }
     }
 
-
-    async fn process_message(webrtc_session_manager: Arc<WebrtcSessionManager>,
-                             session: Arc<SignalingServerSession>,
-                             message: AgentSocketMessage) -> Result<Option<AgentSocketMessage>> {
+    async fn process_message(
+        webrtc_session_manager: Arc<WebrtcSessionManager>,
+        session: Arc<SignalingServerSession>,
+        message: AgentSocketMessage,
+    ) -> Result<Option<AgentSocketMessage>> {
         match message {
             AgentSocketMessage::ServerHello { data } => {
                 info!("Got server hello. Server name is '{}'", data.server_name);
-                Ok(Some(AgentSocketMessage::AgentHello { data: session.agent_description.clone() }))
+                Ok(Some(AgentSocketMessage::AgentHello {
+                    data: session.agent_description.clone(),
+                }))
             }
             AgentSocketMessage::ClientInitMessage { data, exchange_id } => {
                 info!("Received client init");
-                let (agent_sdp, uuid) = webrtc_session_manager.add_session( data.sdp).await?;
-                debug!("Client init complete. Send client init response with uuid={}", uuid);
+                let (agent_sdp, uuid) = webrtc_session_manager.add_session(data.sdp).await?;
+                debug!(
+                    "Client init complete. Send client init response with uuid={}",
+                    uuid
+                );
                 Ok(Some(AgentSocketMessage::ClientInitResponseMessage {
-                    data: ClientInitResponsePayload { sdp: agent_sdp.to_string(), agent_session_uuid: uuid },
+                    data: ClientInitResponsePayload {
+                        sdp: agent_sdp.to_string(),
+                        agent_session_uuid: uuid,
+                    },
                     exchange_id,
                 }))
             }
@@ -139,6 +162,5 @@ impl SignalingServerManager {
                 }))
             }
         }
-
     }
 }

@@ -23,11 +23,10 @@ mod webrtc;
 use crate::configuration::Configuration;
 use crate::hardware::audio_io::AudioSessionManager;
 use crate::signaling::signaling_server_manager::SignalingServerManager;
-use crate::webrtc::webrtc_session::WebrtcSessionManager;
+use crate::webrtc::webrtc_session_manager::WebrtcSessionManager;
 use clap::Parser;
 use log::error;
 use std::sync::{Arc, Mutex};
-
 
 const APPLICATION_VERSION: &'static str = "0.1.0";
 const AGENT_TYPE_NAME: &'static str = "QSP Agent";

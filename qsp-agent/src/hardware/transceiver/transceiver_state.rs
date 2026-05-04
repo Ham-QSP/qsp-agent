@@ -15,5 +15,5 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 
 #[derive(Clone)]
 pub struct TransceiverState {
-    pub mainVfoFreq: u64
+    pub mainVfoFreq: u64,
 }
