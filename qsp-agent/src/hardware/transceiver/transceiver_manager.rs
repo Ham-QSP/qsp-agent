@@ -28,6 +28,7 @@ pub struct TransceiverManager {
     hamlib: Hamlib,
     rig: Mutex<Rig>,
     state: Mutex<TransceiverState>,
+    state_polling_interval: Duration,
     command_session: Vec<CommandSession>,
 }
 
@@ -69,6 +70,9 @@ impl TransceiverManager {
             hamlib,
             rig: Mutex::new(rig),
             state: Mutex::new(TransceiverState { mainVfoFreq: 0 }),
+            state_polling_interval: Duration::from_millis(
+                configuration.transceiver.state_polling_interval_ms,
+            ),
             command_session: vec![],
         });
         manager.full_state_update()?;
@@ -90,11 +94,10 @@ impl TransceiverManager {
     }
 
     fn state_polling_thread_loop(&self) {
-        let polling_interval = Duration::from_secs(1);
         let mut next_poll = Instant::now();
 
         loop {
-            next_poll += polling_interval;
+            next_poll += self.state_polling_interval;
 
             if let Err(error) = self.full_state_update() {
                 error!("Failed to update transceiver state: {}", error.message);

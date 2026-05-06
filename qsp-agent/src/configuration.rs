@@ -42,8 +42,17 @@ pub struct Transceiver {
     pub rig_model: u32,
     #[serde(rename = "hamlibDebugLevel", default)]
     pub hamlib_debug_level: Option<HamlibDebugLevel>,
+    #[serde(
+        rename = "statePollingInterval",
+        default = "default_state_polling_interval_ms"
+    )]
+    pub state_polling_interval_ms: u64,
     #[serde(default)]
     pub port: HashMap<String, String>,
+}
+
+fn default_state_polling_interval_ms() -> u64 {
+    1000
 }
 
 #[derive(Deserialize, Debug, Clone, Copy)]
