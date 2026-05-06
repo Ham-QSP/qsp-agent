@@ -21,27 +21,37 @@ use log::{debug, info};
 
 use crate::audio::AudioEncodedFrame;
 use crate::hardware::audio_io::AudioSessionManager;
+use crate::hardware::transceiver::transceiver_manager::TransceiverManager;
 use crate::webrtc::webrtc_session::WebrtcSession;
 
 pub struct WebrtcSessionManager {
     sessions: Mutex<Vec<WebrtcSession>>,
     encoded_receiver: Receiver<AudioEncodedFrame>,
     session_manager: Arc<Mutex<AudioSessionManager>>,
+    transceiver_manager: Arc<TransceiverManager>,
 }
 
 impl WebrtcSessionManager {
-    pub fn new(session_manager: Arc<Mutex<AudioSessionManager>>) -> Self {
+    pub fn new(
+        session_manager: Arc<Mutex<AudioSessionManager>>,
+        transceiver_manager: Arc<TransceiverManager>,
+    ) -> Self {
         Self {
             sessions: Mutex::new(Vec::new()),
             session_manager: session_manager.clone(),
             encoded_receiver: session_manager.lock().unwrap().get_audio_receiver(),
+            transceiver_manager,
         }
     }
 
     pub async fn add_session(&self, client_sdp: String) -> Result<(Box<String>, Arc<String>)> {
-        let session = WebrtcSession::create_session(client_sdp, self.encoded_receiver.clone())
-            .await
-            .expect("Start RTC session failed");
+        let session = WebrtcSession::create_session(
+            client_sdp,
+            self.encoded_receiver.clone(),
+            self.transceiver_manager.clone(),
+        )
+        .await
+        .expect("Start RTC session failed");
         let mut sessions = self.sessions.lock().unwrap();
         let uuid = session.agent_rtc_uuid.clone();
         let agent_sdp = Box::new(session.agent_sdp.as_ref().clone());

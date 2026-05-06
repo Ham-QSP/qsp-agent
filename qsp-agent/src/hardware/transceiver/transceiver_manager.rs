@@ -18,20 +18,20 @@ use crate::hardware::error::IOError;
 use crate::hardware::transceiver::transceiver_state::{
     TransceiverParameter, TransceiverState, TransceiverStateMessage, TransceiverSubsystem,
 };
-use crossbeam_channel::{unbounded, Receiver, Sender};
 use hamlib::hamlib::{Hamlib, RigDebugLevel};
 use hamlib::rig::Rig;
 use log::{debug, error, info, trace, warn};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 pub struct TransceiverManager {
     hamlib: Hamlib,
     rig: Mutex<Rig>,
     state: Mutex<TransceiverState>,
     state_polling_interval: Duration,
-    state_update_senders: Mutex<Vec<Sender<TransceiverStateMessage>>>,
+    state_update_senders: Mutex<Vec<UnboundedSender<TransceiverStateMessage>>>,
 }
 
 impl TransceiverManager {
@@ -77,7 +77,6 @@ impl TransceiverManager {
             ),
             state_update_senders: Mutex::new(vec![]),
         });
-        manager.full_state_update()?;
 
         let polling_manager = Arc::clone(&manager);
         thread::spawn(move || polling_manager.state_polling_thread_loop());
@@ -85,36 +84,36 @@ impl TransceiverManager {
         Ok(manager)
     }
 
-    pub fn full_state_update(&self) -> Result<(), IOError> {
+    pub fn full_state_update(&self) -> Result<bool, IOError> {
+        let mut updated = false;
         let freq = self.rig.lock().unwrap().get_freq(0).map_err(|e| IOError {
             message: e.message.to_string(),
         })?;
         let freq = freq as u64;
 
-        let update = {
-            let mut state = self.state.lock().unwrap();
-            if state.mainVfoFreq == freq {
-                None
-            } else {
-                state.mainVfoFreq = freq;
-                Some(TransceiverStateMessage {
-                    subsystem: TransceiverSubsystem::Vfo { id: 0 },
-                    parameter: TransceiverParameter::Frequency { freq },
-                })
-            }
-        };
-
-        if let Some(update) = update {
-            self.send_state_update(update);
+        let mut state = self.state.lock().unwrap();
+        if state.mainVfoFreq != freq {
+            state.mainVfoFreq = freq;
+            updated = true;
         }
 
-        Ok(())
+        Ok(updated)
     }
 
-    pub fn add_state_update_receiver(&self) -> Receiver<TransceiverStateMessage> {
-        let (sender, receiver) = unbounded();
+    pub fn add_state_update_receiver(&self) -> UnboundedReceiver<TransceiverStateMessage> {
+        let (sender, receiver) = unbounded_channel();
         self.state_update_senders.lock().unwrap().push(sender);
         receiver
+    }
+
+    pub fn send_current_state(&self) {
+        let state = self.state.lock().unwrap().clone();
+        self.send_state_update(TransceiverStateMessage {
+            subsystem: TransceiverSubsystem::Vfo { id: 0 },
+            parameter: TransceiverParameter::Frequency {
+                freq: state.mainVfoFreq,
+            },
+        });
     }
 
     fn send_state_update(&self, update: TransceiverStateMessage) {
@@ -129,9 +128,9 @@ impl TransceiverManager {
 
         loop {
             next_poll += self.state_polling_interval;
-
-            if let Err(error) = self.full_state_update() {
-                error!("Failed to update transceiver state: {}", error.message);
+            match self.full_state_update() {
+                Ok(updated) => { if updated { self.send_current_state()} }
+                Err(error) => {error!("Failed to update transceiver state: {}", error.message);}
             }
 
             let now = Instant::now();

@@ -2281,7 +2281,6 @@ dependencies = [
  "clap",
  "console-subscriber",
  "cpal",
- "crossbeam-channel",
  "env_logger",
  "flume",
  "futures",

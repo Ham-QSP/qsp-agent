@@ -42,6 +42,7 @@ use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSampl
 use webrtc::track::track_local::TrackLocal;
 
 use crate::audio::AudioEncodedFrame;
+use crate::hardware::transceiver::transceiver_manager::TransceiverManager;
 use crate::webrtc::command_session::CommandSession;
 
 pub struct WebrtcSession {
@@ -56,6 +57,7 @@ impl WebrtcSession {
     pub(super) async fn create_session(
         client_sdp: String,
         encoded_receiver: Receiver<AudioEncodedFrame>,
+        transceiver_manager: Arc<TransceiverManager>,
     ) -> Result<WebrtcSession> {
         debug!("Starting webRTC session");
         // Create a MediaEngine object to configure the supported codec
@@ -198,7 +200,11 @@ impl WebrtcSession {
         ));
 
         let command_session = Arc::new(Mutex::new(None));
-        Self::register_data_channel_handler(&peer_connection, Arc::clone(&command_session));
+        Self::register_data_channel_handler(
+            &peer_connection,
+            Arc::clone(&command_session),
+            transceiver_manager,
+        );
 
         // Wait for the offer to be pasted
         let offer = RTCSessionDescription::offer(client_sdp)?;
@@ -246,46 +252,33 @@ impl WebrtcSession {
     fn register_data_channel_handler(
         peer_connection: &Arc<RTCPeerConnection>,
         command_session_store: Arc<Mutex<Option<CommandSession>>>,
+        transceiver_manager: Arc<TransceiverManager>,
     ) {
-        peer_connection.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            let d_label = d.label().to_owned();
-            let d_id = d.id();
+        peer_connection.on_data_channel(Box::new(move |data_channel: Arc<RTCDataChannel>| {
+            let d_label = data_channel.label().to_owned();
+            let d_id = data_channel.id();
             debug!("New DataChannel {d_label} {d_id}");
-            *command_session_store.lock().unwrap() = Some(CommandSession::new());
+            *command_session_store.lock().unwrap() = Some(CommandSession::new(data_channel.clone(), transceiver_manager.clone()));
             let command_session_for_messages = Arc::clone(&command_session_store);
 
             Box::pin(async move {
-                let d2 = Arc::clone(&d);
+                let d2 = Arc::clone(&data_channel);
                 let d_label2 = d_label.clone();
                 let d_id2 = d_id;
-                d.on_close(Box::new(move || {
+                data_channel.on_close(Box::new(move || {
                     debug!("Data channel closed");
                     Box::pin(async {})
                 }));
 
-                d.on_open(Box::new(move || {
-                    debug!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
+                data_channel.on_open(Box::new(move || {
+                    debug!("Data channel '{d_label2}'-'{d_id2}' open. ");
 
-                    Box::pin(async move {
-                        let mut result = Result::<usize>::Ok(0);
-                        while result.is_ok() {
-                            let timeout = tokio::time::sleep(Duration::from_secs(5));
-                            tokio::pin!(timeout);
-
-                            tokio::select! {
-                                _ = timeout.as_mut() =>{
-                                    let message = math_rand_alpha(15);
-                                    debug!("Sending '{message}'");
-                                    result = d2.send_text(message).await.map_err(Into::into);
-                                }
-                            };
-                        }
-                    })
+                    Box::pin(async {})
                 }));
 
                 // Register protobuf message handling
                 let command_session = Arc::clone(&command_session_for_messages);
-                d.on_message(Box::new(move |msg: DataChannelMessage| {
+                data_channel.on_message(Box::new(move |msg: DataChannelMessage| {
                     match AgentControlMessage::decode(msg.data) {
                         Ok(message) => {
                             if let Some(command_session) = command_session.lock().unwrap().as_mut() {

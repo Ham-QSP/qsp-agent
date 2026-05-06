@@ -13,6 +13,8 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
+use std::fmt;
+
 #[derive(Clone)]
 pub struct TransceiverState {
     pub mainVfoFreq: u64,
@@ -28,6 +30,15 @@ pub struct TransceiverStateMessage {
 pub enum TransceiverSubsystem {
     General,
     Vfo { id: u8 },
+}
+
+impl fmt::Display for TransceiverSubsystem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::General => write!(f, "general"),
+            Self::Vfo { id } => write!(f, "vfo:{id}"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
