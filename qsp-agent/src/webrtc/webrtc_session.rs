@@ -288,8 +288,7 @@ impl WebrtcSession {
                 d.on_message(Box::new(move |msg: DataChannelMessage| {
                     match AgentControlMessage::decode(msg.data) {
                         Ok(message) => {
-                            if let Some(command_session) = command_session.lock().unwrap().as_ref()
-                            {
+                            if let Some(command_session) = command_session.lock().unwrap().as_mut() {
                                 command_session.command_received(&message);
                             }
                         }

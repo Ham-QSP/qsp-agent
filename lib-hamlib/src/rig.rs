@@ -75,6 +75,10 @@ pub struct Rig {
     pub(crate) rig: *mut RIG,
 }
 
+// SAFETY: Rig owns an opaque hamlib handle. Callers that share it across
+// threads must provide synchronization around hamlib calls.
+unsafe impl Send for Rig {}
+
 pub type RigFreqCallback = fn();
 
 impl Rig {

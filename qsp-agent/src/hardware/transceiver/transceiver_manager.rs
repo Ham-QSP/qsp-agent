@@ -16,19 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 use crate::configuration::{Configuration, HamlibDebugLevel as ConfigHamlibDebugLevel};
 use crate::hardware::error::IOError;
 use crate::hardware::transceiver::transceiver_state::TransceiverState;
+use crate::webrtc::command_session::CommandSession;
 use hamlib::hamlib::{Hamlib, RigDebugLevel};
 use hamlib::rig::Rig;
 use log::{debug, error, info, trace, warn};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
 
 pub struct TransceiverManager {
     hamlib: Hamlib,
-    rig: Rig,
+    rig: Mutex<Rig>,
     state: Mutex<TransceiverState>,
+    command_session: Vec<CommandSession>,
 }
 
 impl TransceiverManager {
-    pub fn new(configuration: Configuration) -> Result<TransceiverManager, IOError> {
+    pub fn new(configuration: Configuration) -> Result<Arc<TransceiverManager>, IOError> {
         debug!("Hamlib init");
         let mut hamlib = Hamlib::new();
         Hamlib::rig_set_debug_callback(Some(Box::new(|level: RigDebugLevel, message: &str| {
@@ -61,28 +65,50 @@ impl TransceiverManager {
                 message: e.message.to_string(),
             })?;
 
-        let manager = TransceiverManager {
+        let manager = Arc::new(TransceiverManager {
             hamlib,
-            rig,
+            rig: Mutex::new(rig),
             state: Mutex::new(TransceiverState { mainVfoFreq: 0 }),
-        };
+            command_session: vec![],
+        });
         manager.full_state_update()?;
+
+        let polling_manager = Arc::clone(&manager);
+        thread::spawn(move || polling_manager.state_polling_thread_loop());
+
         Ok(manager)
     }
 
     pub fn full_state_update(&self) -> Result<(), IOError> {
-        let mut state = self.state.lock().unwrap();
-        match self.rig.get_freq(0) {
-            Ok(freq) => state.mainVfoFreq = freq as u64,
-            Err(e) => {
-                return Err(IOError {
-                    message: e.message.to_string(),
-                })
-            }
-        };
+        let freq = self.rig.lock().unwrap().get_freq(0).map_err(|e| IOError {
+            message: e.message.to_string(),
+        })?;
+
+        self.state.lock().unwrap().mainVfoFreq = freq as u64;
 
         Ok(())
     }
+
+    fn state_polling_thread_loop(&self) {
+        let polling_interval = Duration::from_secs(1);
+        let mut next_poll = Instant::now();
+
+        loop {
+            next_poll += polling_interval;
+
+            if let Err(error) = self.full_state_update() {
+                error!("Failed to update transceiver state: {}", error.message);
+            }
+
+            let now = Instant::now();
+            if next_poll > now {
+                thread::sleep(next_poll - now);
+            } else {
+                next_poll = now;
+            }
+        }
+    }
+
     pub fn get_state(&self) -> TransceiverState {
         self.state.lock().unwrap().clone()
     }
