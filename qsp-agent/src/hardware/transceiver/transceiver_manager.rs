@@ -15,8 +15,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 
 use crate::configuration::{Configuration, HamlibDebugLevel as ConfigHamlibDebugLevel};
 use crate::hardware::error::IOError;
-use crate::hardware::transceiver::transceiver_state::TransceiverState;
-use crate::webrtc::command_session::CommandSession;
+use crate::hardware::transceiver::transceiver_state::{
+    TransceiverParameter, TransceiverState, TransceiverStateMessage, TransceiverSubsystem,
+};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use hamlib::hamlib::{Hamlib, RigDebugLevel};
 use hamlib::rig::Rig;
 use log::{debug, error, info, trace, warn};
@@ -29,7 +31,7 @@ pub struct TransceiverManager {
     rig: Mutex<Rig>,
     state: Mutex<TransceiverState>,
     state_polling_interval: Duration,
-    command_session: Vec<CommandSession>,
+    state_update_senders: Mutex<Vec<Sender<TransceiverStateMessage>>>,
 }
 
 impl TransceiverManager {
@@ -73,7 +75,7 @@ impl TransceiverManager {
             state_polling_interval: Duration::from_millis(
                 configuration.transceiver.state_polling_interval_ms,
             ),
-            command_session: vec![],
+            state_update_senders: Mutex::new(vec![]),
         });
         manager.full_state_update()?;
 
@@ -87,10 +89,39 @@ impl TransceiverManager {
         let freq = self.rig.lock().unwrap().get_freq(0).map_err(|e| IOError {
             message: e.message.to_string(),
         })?;
+        let freq = freq as u64;
 
-        self.state.lock().unwrap().mainVfoFreq = freq as u64;
+        let update = {
+            let mut state = self.state.lock().unwrap();
+            if state.mainVfoFreq == freq {
+                None
+            } else {
+                state.mainVfoFreq = freq;
+                Some(TransceiverStateMessage {
+                    subsystem: TransceiverSubsystem::Vfo { id: 0 },
+                    parameter: TransceiverParameter::Frequency { freq },
+                })
+            }
+        };
+
+        if let Some(update) = update {
+            self.send_state_update(update);
+        }
 
         Ok(())
+    }
+
+    pub fn add_state_update_receiver(&self) -> Receiver<TransceiverStateMessage> {
+        let (sender, receiver) = unbounded();
+        self.state_update_senders.lock().unwrap().push(sender);
+        receiver
+    }
+
+    fn send_state_update(&self, update: TransceiverStateMessage) {
+        self.state_update_senders
+            .lock()
+            .unwrap()
+            .retain(|sender| sender.send(update.clone()).is_ok());
     }
 
     fn state_polling_thread_loop(&self) {

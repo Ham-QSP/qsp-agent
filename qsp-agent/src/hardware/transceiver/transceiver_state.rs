@@ -17,3 +17,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 pub struct TransceiverState {
     pub mainVfoFreq: u64,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransceiverStateMessage {
+    pub subsystem: TransceiverSubsystem,
+    pub parameter: TransceiverParameter,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TransceiverSubsystem {
+    General,
+    Vfo { id: u8 },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TransceiverParameter {
+    Frequency { freq: u64 },
+}

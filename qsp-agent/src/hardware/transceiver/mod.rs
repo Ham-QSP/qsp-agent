@@ -13,4 +13,4 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 pub mod transceiver_manager;
-mod transceiver_state;
+pub mod transceiver_state;
