@@ -28,8 +28,8 @@ use clap::Parser;
 use log::error;
 use std::sync::{Arc, Mutex};
 
-const APPLICATION_VERSION: &'static str = "0.1.0";
-const AGENT_TYPE_NAME: &'static str = "QSP Agent";
+const APPLICATION_VERSION: &str = "0.1.0";
+const AGENT_TYPE_NAME: &str = "QSP Agent";
 
 #[tokio::main]
 async fn main() {

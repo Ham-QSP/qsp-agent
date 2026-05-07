@@ -45,7 +45,7 @@ impl AudioSessionManager {
 
 #[derive(Clone)]
 pub struct AudioSession {
-    stream: Arc<Stream>,
+    _stream: Arc<Stream>,
     pub encoded_receiver: Receiver<AudioEncodedFrame>,
 }
 
@@ -131,7 +131,7 @@ impl AudioSession {
         //self.stream = Some(Rc::new(stream));
         //encoded_receiver
         let s = Self {
-            stream: Arc::new(stream),
+            _stream: Arc::new(stream),
             encoded_receiver,
         };
         return s;

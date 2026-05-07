@@ -129,8 +129,14 @@ impl TransceiverManager {
         loop {
             next_poll += self.state_polling_interval;
             match self.full_state_update() {
-                Ok(updated) => { if updated { self.send_current_state()} }
-                Err(error) => {error!("Failed to update transceiver state: {}", error.message);}
+                Ok(updated) => {
+                    if updated {
+                        self.send_current_state()
+                    }
+                }
+                Err(error) => {
+                    error!("Failed to update transceiver state: {}", error.message);
+                }
             }
 
             let now = Instant::now();

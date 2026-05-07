@@ -15,13 +15,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use anyhow::Result;
 use flume::Receiver;
 use log::{debug, error, info};
 use prost::Message;
-use qsp_proto_files::qsp::example::v1::AgentControlMessage;
+use qsp_proto_files::qsp::message::v1::AgentControlMessage;
 use tokio::sync::Notify;
 use uuid::Uuid;
 use webrtc::api::interceptor_registry::register_default_interceptors;
@@ -36,7 +35,7 @@ use webrtc::media::Sample;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::peer_connection::{math_rand_alpha, RTCPeerConnection};
+use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use webrtc::track::track_local::TrackLocal;
@@ -262,7 +261,6 @@ impl WebrtcSession {
             let command_session_for_messages = Arc::clone(&command_session_store);
 
             Box::pin(async move {
-                let d2 = Arc::clone(&data_channel);
                 let d_label2 = d_label.clone();
                 let d_id2 = d_id;
                 data_channel.on_close(Box::new(move || {

@@ -17,8 +17,12 @@ use crate::hardware::transceiver::transceiver_state::{TransceiverParameter, Tran
 use bytes::Bytes;
 use log::{debug, error};
 use prost::Message;
-use qsp_proto_files::qsp::example::v1::payload::Value;
-use qsp_proto_files::qsp::example::v1::{payload, AgentControlMessage, Payload, VfoState};
+use qsp_proto_files::qsp::message::v1::agent_control_message::Message as AgentControlPayload;
+use qsp_proto_files::qsp::message::v1::agent_control_message::Message::Transceiver;
+use qsp_proto_files::qsp::message::v1::agent_message::AgentMessage as AgentPayload;
+use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage as TransceiverPayload;
+use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage::FrequencyMessage;
+use qsp_proto_files::qsp::message::v1::{AgentControlMessage, TrxFrequency};
 use std::sync::Arc;
 use webrtc::data_channel::RTCDataChannel;
 
@@ -40,55 +44,74 @@ impl CommandSession {
         }
     }
     pub fn command_received(&mut self, message: &AgentControlMessage) {
-        let payload = message
-            .payload
-            .as_ref()
-            .and_then(|payload| payload.value.as_ref());
         let payload_type = CommandSession::agent_control_payload_type(message);
 
         debug!(
-            "AgentControlMessage from DataChannel 'id={}, response_id={}, payload={}'",
-            message.id, message.response_id, payload_type,
+            "AgentControlMessage from DataChannel 'payload={}'",
+            payload_type,
         );
-
-        match payload {
-            Some(Value::Hello(_)) => {
-                if !self.hello_done {
-                    debug!("Hello received from DataChannel");
-                    self.hello_done = true;
-                    tokio::spawn(CommandSession::transceiver_event_loop(
-                        self.data_channel.clone(),
-                        self.transceiver_manager.clone(),
-                    ));
+        match message.message.as_ref() {
+            Some(AgentControlPayload::Agent(agent_message)) => {
+                match agent_message.agent_message.as_ref() {
+                    Some(AgentPayload::Hello(_)) => {
+                        if !self.hello_done {
+                            debug!("Hello received from DataChannel");
+                            self.hello_done = true;
+                            tokio::spawn(CommandSession::transceiver_event_loop(
+                                self.data_channel.clone(),
+                                self.transceiver_manager.clone(),
+                            ));
+                        }
+                    }
+                    None => {
+                        error!("AgentControlMessage agent payload is empty");
+                    }
                 }
             }
-            _ if self.hello_done => {
-                debug!(
-                    "AgentControlMessage '{}' received after hello handshake",
-                    payload_type
-                );
-                CommandSession::command_received_filtered(payload.unwrap());
+            Some(AgentControlPayload::Transceiver(transceiver_message)) if self.hello_done => {
+                if let Some(payload) = transceiver_message.transceiver_message.as_ref() {
+                    CommandSession::command_transceiver_received(payload);
+                } else {
+                    error!("AgentControlMessage transceiver payload is empty");
+                }
             }
-            _ => {
+            Some(_) => {
                 error!(
                     "AgentControlMessage '{}' received before hello handshake",
                     payload_type
                 );
             }
+            None => {
+                error!("AgentControlMessage payload is empty");
+            }
         }
     }
-    fn command_received_filtered(payload: &Value) {
-        todo!()
+
+    fn command_transceiver_received(payload: &TransceiverPayload) {
+        match payload {
+            TransceiverPayload::FrequencyMessage(frequency) => {
+                debug!(
+                    "Frequency command received for VFO {}: {}",
+                    frequency.vfo_id, frequency.frequency
+                );
+            }
+        }
     }
 
     fn agent_control_payload_type(message: &AgentControlMessage) -> &'static str {
-        match message
-            .payload
-            .as_ref()
-            .and_then(|payload| payload.value.as_ref())
-        {
-            Some(Value::Hello(_)) => "hello",
-            Some(Value::VfoState(_)) => "vfo_state",
+        match message.message.as_ref() {
+            Some(AgentControlPayload::Agent(agent_message)) => {
+                match agent_message.agent_message.as_ref() {
+                    Some(AgentPayload::Hello(_)) => "hello",
+                    None => "agent_empty",
+                }
+            }
+            Some(AgentControlPayload::Transceiver(transceiver_message)) => {
+                match transceiver_message.transceiver_message.as_ref() {
+                    Some(TransceiverPayload::FrequencyMessage(_)) => "frequency",
+                    None => "transceiver_empty",
+                }
+            }
             None => "none",
         }
     }
@@ -118,14 +141,14 @@ async fn evt_freq_updated(
     match transceiver_subsystem {
         TransceiverSubsystem::Vfo { id } => {
             let message = AgentControlMessage {
-                id: 0,
-                response_id: 0,
-                payload: Some(Payload {
-                    value: Some(Value::VfoState(VfoState {
-                        frequency: freq,
-                        vfo_mode: String::new(),
-                    })),
-                }),
+                message: Some(Transceiver(
+                    qsp_proto_files::qsp::message::v1::TransceiverMessage {
+                        transceiver_message: Some(FrequencyMessage(TrxFrequency {
+                            vfo_id: id as u32,
+                            frequency: freq,
+                        })),
+                    },
+                )),
             };
 
             let bytes = Bytes::from(message.encode_to_vec());
