@@ -100,6 +100,10 @@ impl TransceiverManager {
         Ok(updated)
     }
 
+    pub fn set_frequency(&self, vfo_id: u32, frequency: u64) {
+        self.rig.lock().unwrap().set_freq(vfo_id, frequency as f64);
+    }
+
     pub fn add_state_update_receiver(&self) -> UnboundedReceiver<TransceiverStateMessage> {
         let (sender, receiver) = unbounded_channel();
         self.state_update_senders.lock().unwrap().push(sender);

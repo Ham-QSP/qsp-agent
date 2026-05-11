@@ -70,7 +70,7 @@ impl CommandSession {
             }
             Some(AgentControlPayload::Transceiver(transceiver_message)) if self.hello_done => {
                 if let Some(payload) = transceiver_message.transceiver_message.as_ref() {
-                    CommandSession::command_transceiver_received(payload);
+                    self.command_transceiver_received(payload);
                 } else {
                     error!("AgentControlMessage transceiver payload is empty");
                 }
@@ -87,13 +87,15 @@ impl CommandSession {
         }
     }
 
-    fn command_transceiver_received(payload: &TransceiverPayload) {
+    fn command_transceiver_received(&self, payload: &TransceiverPayload) {
         match payload {
             TransceiverPayload::FrequencyMessage(frequency) => {
                 debug!(
                     "Frequency command received for VFO {}: {}",
                     frequency.vfo_id, frequency.frequency
                 );
+                self.transceiver_manager
+                    .set_frequency(frequency.vfo_id, frequency.frequency);
             }
         }
     }
