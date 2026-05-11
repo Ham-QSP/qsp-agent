@@ -5,5 +5,4 @@ use clap::Parser;
 pub struct Cli {
     #[arg(short, long, value_name = "CONFIG_PATH")]
     pub(crate) config: Option<String>,
-
 }

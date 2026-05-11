@@ -15,6 +15,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 
 use std::sync::Arc;
 
+use log::error;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -37,13 +38,13 @@ pub enum AgentSocketMessage {
     ClientInitMessage {
         data: ClientInitPayload,
         #[serde(rename = "exchangeId")]
-        exchange_id: u32
+        exchange_id: u32,
     },
     #[serde(rename = "INIT_RESPONSE")]
     ClientInitResponseMessage {
         data: ClientInitResponsePayload,
         #[serde(rename = "exchangeId")]
-        exchange_id: u32
+        exchange_id: u32,
     },
 }
 
@@ -87,10 +88,15 @@ pub struct ClientInitPayload {
 pub struct ClientInitResponsePayload {
     pub sdp: String,
     #[serde(rename = "agentSessionUuid")]
-    pub agent_session_uuid: Arc<String>
+    pub agent_session_uuid: Arc<String>,
 }
 
-pub fn decode_agent_message(message_str: String) -> AgentSocketMessage {
-    serde_json::from_str(&*message_str).expect("Can't decode agent message")
+pub fn decode_agent_message(message_str: String) -> serde_json::Result<AgentSocketMessage> {
+    match serde_json::from_str(&message_str) {
+        Ok(message) => Ok(message),
+        Err(err) => {
+            error!("Failed to decode agent message '{}': {}", message_str, err);
+            Err(err)
+        }
+    }
 }
-

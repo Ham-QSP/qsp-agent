@@ -22,7 +22,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::Stream;
 use cpal::{SampleFormat, SampleRate, SupportedStreamConfig, SupportedStreamConfigRange};
 use flume::Receiver;
-use log::{debug, info};
+use log::{debug, error, info};
 
 pub struct AudioSessionManager {
     session: Option<AudioSession>,
@@ -45,7 +45,7 @@ impl AudioSessionManager {
 
 #[derive(Clone)]
 pub struct AudioSession {
-    stream: Arc<Stream>,
+    _stream: Arc<Stream>,
     pub encoded_receiver: Receiver<AudioEncodedFrame>,
 }
 
@@ -131,7 +131,7 @@ impl AudioSession {
         //self.stream = Some(Rc::new(stream));
         //encoded_receiver
         let s = Self {
-            stream: Arc::new(stream),
+            _stream: Arc::new(stream),
             encoded_receiver,
         };
         return s;
@@ -157,6 +157,7 @@ impl AudioSession {
                 )
             });
         } else {
+            error!("No supported audio configs found");
             None
         };
     }

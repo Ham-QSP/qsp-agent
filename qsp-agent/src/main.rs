@@ -14,23 +14,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
 mod audio;
+mod command_line;
+mod configuration;
+mod hardware;
 mod signaling;
 mod webrtc;
-mod hardware;
-mod configuration;
-mod command_line;
 
-use crate::hardware::audio_io::AudioSessionManager;
-use std::sync::{Arc, Mutex};
-use log::error;
 use crate::configuration::Configuration;
+use crate::hardware::audio_io::AudioSessionManager;
 use crate::signaling::signaling_server_manager::SignalingServerManager;
-use crate::webrtc::webrtc_session::WebrtcSessionManager;
+use crate::webrtc::webrtc_session_manager::WebrtcSessionManager;
 use clap::Parser;
+use log::error;
+use std::sync::{Arc, Mutex};
 
-
-const APPLICATION_VERSION: &'static str = "0.1.0";
-const AGENT_TYPE_NAME: &'static str = "QSP Agent";
+const APPLICATION_VERSION: &str = "0.1.0";
+const AGENT_TYPE_NAME: &str = "QSP Agent";
 
 #[tokio::main]
 async fn main() {
@@ -38,23 +37,32 @@ async fn main() {
     console_subscriber::init();
 
     let cli = command_line::Cli::parse();
-    
+
     let config_path = cli.config.unwrap_or("config.toml".parse().unwrap());
-    
+
     match configuration::load_config(config_path) {
         Ok(config) => {
             start_server(config).await;
         }
         Err(e) => error!("Failed to load configuration: {}", e),
     }
-
 }
 
 async fn start_server(config: Configuration) {
+    let transceiver_manager =
+        hardware::transceiver::transceiver_manager::TransceiverManager::new(config.clone())
+            .unwrap();
+
     let audio_session_manager = Arc::new(Mutex::new(AudioSessionManager::new()));
-    let webrtc_session_manager = Arc::new(WebrtcSessionManager::new(audio_session_manager));
+    let webrtc_session_manager = Arc::new(WebrtcSessionManager::new(
+        audio_session_manager,
+        transceiver_manager,
+    ));
 
-    let signal_server_session = SignalingServerManager::new(config.clone(), webrtc_session_manager.clone());
+    let signal_server_session =
+        SignalingServerManager::new(config.clone(), webrtc_session_manager.clone());
 
-    signal_server_session.start(config.signaling_server.url).await;
+    signal_server_session
+        .start(config.signaling_server.url)
+        .await;
 }

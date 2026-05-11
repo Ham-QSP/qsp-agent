@@ -4,10 +4,10 @@ it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License,
 or (at your option) any later version.
 
-This program is distributed in the hope that it will be useful, but
-WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
@@ -18,44 +18,43 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use flume::Receiver;
 use log::{debug, info};
-use uuid::Uuid;
-use webrtc::peer_connection::RTCPeerConnection;
 
-use crate::audio::{AudioEncodedFrame};
+use crate::audio::AudioEncodedFrame;
 use crate::hardware::audio_io::AudioSessionManager;
-use crate::webrtc::webrtc_util::start_session;
-
-pub struct WebrtcSession {
-    pub agent_rtc_uuid: Arc<String>,
-    pub peer_rtc_connection: Option<Arc<RTCPeerConnection>>,
-    encoded_receiver: Receiver<AudioEncodedFrame>,
-}
+use crate::hardware::transceiver::transceiver_manager::TransceiverManager;
+use crate::webrtc::webrtc_session::WebrtcSession;
 
 pub struct WebrtcSessionManager {
     sessions: Mutex<Vec<WebrtcSession>>,
     encoded_receiver: Receiver<AudioEncodedFrame>,
     session_manager: Arc<Mutex<AudioSessionManager>>,
+    transceiver_manager: Arc<TransceiverManager>,
 }
 
 impl WebrtcSessionManager {
-    pub fn new(session_manager: Arc<Mutex<AudioSessionManager>>) -> Self {
+    pub fn new(
+        session_manager: Arc<Mutex<AudioSessionManager>>,
+        transceiver_manager: Arc<TransceiverManager>,
+    ) -> Self {
         Self {
             sessions: Mutex::new(Vec::new()),
             session_manager: session_manager.clone(),
-            encoded_receiver : session_manager.lock().unwrap().get_audio_receiver(),
+            encoded_receiver: session_manager.lock().unwrap().get_audio_receiver(),
+            transceiver_manager,
         }
     }
 
     pub async fn add_session(&self, client_sdp: String) -> Result<(Box<String>, Arc<String>)> {
-        let (peer_connection, agent_sdp) =
-            start_session(client_sdp, self.encoded_receiver.clone()).await.expect("Start RTC session failed");
-        let session = WebrtcSession {
-            agent_rtc_uuid: Arc::new(Uuid::new_v4().to_string()),
-            peer_rtc_connection: Some(peer_connection),
-            encoded_receiver: self.encoded_receiver.clone(),
-        };
+        let session = WebrtcSession::create_session(
+            client_sdp,
+            self.encoded_receiver.clone(),
+            self.transceiver_manager.clone(),
+        )
+        .await
+        .expect("Start RTC session failed");
         let mut sessions = self.sessions.lock().unwrap();
         let uuid = session.agent_rtc_uuid.clone();
+        let agent_sdp = Box::new(session.agent_sdp.as_ref().clone());
 
         sessions.push(session);
         Ok((agent_sdp, uuid))
@@ -63,12 +62,14 @@ impl WebrtcSessionManager {
 
     pub async fn delete_session(&self, uuid: String) {
         let mut sessions = self.sessions.lock().unwrap();
-        let position = sessions.iter().position(|s| uuid.eq(s.agent_rtc_uuid.as_str()));
+        let position = sessions
+            .iter()
+            .position(|s| uuid.eq(s.agent_rtc_uuid.as_str()));
 
         match position {
             Some(position) => {
                 sessions.remove(position);
-                debug!("Delete session {}", uuid )
+                debug!("Delete session {}", uuid)
             }
             None => {
                 info!("Failed to delete session: uuid {} not found", uuid)
@@ -76,4 +77,3 @@ impl WebrtcSessionManager {
         };
     }
 }
-
