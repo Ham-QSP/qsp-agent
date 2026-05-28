@@ -71,7 +71,10 @@ impl TransceiverManager {
         let manager = Arc::new(TransceiverManager {
             hamlib,
             rig: Mutex::new(rig),
-            state: Mutex::new(TransceiverState { main_vfo_freq: 0 }),
+            state: Mutex::new(TransceiverState {
+                main_vfo_freq: 0,
+                main_vfo_mode: None,
+            }),
             state_polling_interval: Duration::from_millis(
                 configuration.transceiver.state_polling_interval_ms,
             ),
@@ -86,14 +89,23 @@ impl TransceiverManager {
 
     pub fn full_state_update(&self) -> Result<bool, IOError> {
         let mut updated = false;
-        let freq = self.rig.lock().unwrap().get_freq(0).map_err(|e| IOError {
+        let rig = self.rig.lock().unwrap();
+        let freq = rig.get_freq(0).map_err(|e| IOError {
+            message: e.message.to_string(),
+        })?;
+        let mode = rig.get_mode(0).map_err(|e| IOError {
             message: e.message.to_string(),
         })?;
         let freq = freq as u64;
+        drop(rig);
 
         let mut state = self.state.lock().unwrap();
         if state.main_vfo_freq != freq {
             state.main_vfo_freq = freq;
+            updated = true;
+        }
+        if state.main_vfo_mode.as_ref() != Some(&mode) {
+            state.main_vfo_mode = Some(mode);
             updated = true;
         }
 
@@ -138,6 +150,12 @@ impl TransceiverManager {
                 freq: state.main_vfo_freq,
             },
         });
+        if let Some(mode) = state.main_vfo_mode {
+            self.send_state_update(TransceiverStateMessage {
+                subsystem: TransceiverSubsystem::Vfo { id: 0 },
+                parameter: TransceiverParameter::Mode { mode },
+            });
+        }
     }
 
     fn send_state_update(&self, update: TransceiverStateMessage) {

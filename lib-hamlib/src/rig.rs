@@ -31,8 +31,7 @@ use crate::hamlib_raw::{
     hamlib_bandselect_t_RIG_BANDSELECT_WFM, pbwidth_t, rig_errcode_e_RIG_OK,
     rig_parm_e_RIG_PARM_BANDSELECT, rmode_t, value_t, vfo_t, RIG, RIG_MODE_NONE,
 };
-use std::ffi::c_void;
-use std::ffi::CString;
+use std::ffi::{c_void, CStr, CString};
 use std::marker::PhantomData;
 use std::os::raw::{c_int, c_uint};
 pub struct CCallback<'closure> {
@@ -174,6 +173,22 @@ impl Rig {
                 return Ok(freq);
             }
             return Err(HamLibError::from_hamlib_error_code(ret));
+        }
+    }
+
+    pub fn get_mode(&self, vfo: u32) -> Result<String, HamLibError<'_>> {
+        unsafe {
+            let mut mode: rmode_t = RIG_MODE_NONE as rmode_t;
+            let mut width: pbwidth_t = 0;
+
+            let ret = hamlib_raw::rig_get_mode(self.rig, vfo, &mut mode, &mut width) as u32;
+            if ret == rig_errcode_e_RIG_OK {
+                let mode = CStr::from_ptr(hamlib_raw::rig_strrmode(mode))
+                    .to_string_lossy()
+                    .into_owned();
+                return Ok(mode);
+            }
+            Err(HamLibError::from_hamlib_error_code(ret))
         }
     }
 }

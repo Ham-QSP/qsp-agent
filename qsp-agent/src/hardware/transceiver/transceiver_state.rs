@@ -18,6 +18,7 @@ use std::fmt;
 #[derive(Clone)]
 pub struct TransceiverState {
     pub main_vfo_freq: u64,
+    pub main_vfo_mode: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -44,4 +45,5 @@ impl fmt::Display for TransceiverSubsystem {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TransceiverParameter {
     Frequency { freq: u64 },
+    Mode { mode: String },
 }

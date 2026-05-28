@@ -22,7 +22,10 @@ use qsp_proto_files::qsp::message::v1::agent_control_message::Message::Transceiv
 use qsp_proto_files::qsp::message::v1::agent_message::AgentMessage as AgentPayload;
 use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage as TransceiverPayload;
 use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage::FrequencyMessage;
-use qsp_proto_files::qsp::message::v1::{AgentControlMessage, Band, TrxFrequency, TrxVfoMode};
+use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage::ModeMessage;
+use qsp_proto_files::qsp::message::v1::{
+    AgentControlMessage, Band, TrxFrequency, TrxMode, TrxVfoMode,
+};
 use std::sync::Arc;
 use webrtc::data_channel::RTCDataChannel;
 
@@ -170,6 +173,9 @@ impl CommandSession {
                 TransceiverParameter::Frequency { freq } => {
                     evt_freq_updated(freq, message.subsystem, Arc::clone(&data_channel)).await
                 }
+                TransceiverParameter::Mode { mode } => {
+                    evt_mode_updated(mode, message.subsystem, Arc::clone(&data_channel)).await
+                }
             }
         }
     }
@@ -212,6 +218,46 @@ fn trx_vfo_mode_to_hamlib(mode: TrxVfoMode) -> Option<&'static str> {
         TrxVfoMode::Spec => Some("SPEC"),
         TrxVfoMode::Cwn => Some("CWN"),
         TrxVfoMode::Am => Some("AM"),
+    }
+}
+
+fn hamlib_mode_to_trx_vfo_mode(mode: &str) -> Option<TrxVfoMode> {
+    match mode.trim().to_ascii_uppercase().as_str() {
+        "CW" => Some(TrxVfoMode::Cw),
+        "USB" => Some(TrxVfoMode::Usb),
+        "LSB" => Some(TrxVfoMode::Lsb),
+        "RTTY" => Some(TrxVfoMode::Rtty),
+        "FM" => Some(TrxVfoMode::Fm),
+        "WFM" => Some(TrxVfoMode::Wfm),
+        "CWR" => Some(TrxVfoMode::Cwr),
+        "RTTYR" => Some(TrxVfoMode::Rttyr),
+        "AMS" => Some(TrxVfoMode::Ams),
+        "PKTLSB" => Some(TrxVfoMode::Pktlsb),
+        "PKTUSB" => Some(TrxVfoMode::Pktusb),
+        "PKTFM" => Some(TrxVfoMode::Pktfm),
+        "ECSSUSB" => Some(TrxVfoMode::Ecssusb),
+        "ECSSLSB" => Some(TrxVfoMode::Exsslsb),
+        "FAX" => Some(TrxVfoMode::Fax),
+        "SAM" => Some(TrxVfoMode::Sam),
+        "DSB" => Some(TrxVfoMode::Dsb),
+        "FMN" => Some(TrxVfoMode::Fmn),
+        "PKTAM" => Some(TrxVfoMode::Pktam),
+        "P25" => Some(TrxVfoMode::P25),
+        "DSTAR" => Some(TrxVfoMode::Dstar),
+        "DPMR" => Some(TrxVfoMode::Dpmr),
+        "NXDNVN" => Some(TrxVfoMode::Nxdnvn),
+        "NXDNN" | "NXDN_N" => Some(TrxVfoMode::NxdnN),
+        "DCR" => Some(TrxVfoMode::Dcr),
+        "AMN" => Some(TrxVfoMode::Amn),
+        "PSK" => Some(TrxVfoMode::Psk),
+        "PSKR" => Some(TrxVfoMode::Pskr),
+        "DD" => Some(TrxVfoMode::Dd),
+        "C4FM" => Some(TrxVfoMode::C4fm),
+        "PKTFMN" => Some(TrxVfoMode::Pktfmn),
+        "SPEC" => Some(TrxVfoMode::Spec),
+        "CWN" => Some(TrxVfoMode::Cwn),
+        "AM" => Some(TrxVfoMode::Am),
+        _ => None,
     }
 }
 
@@ -274,6 +320,46 @@ async fn evt_freq_updated(
         TransceiverSubsystem::General => {
             error!(
                 "Received unknown transceiver subsystem ({}) to set frequency",
+                transceiver_subsystem
+            );
+        }
+    }
+}
+
+async fn evt_mode_updated(
+    mode: String,
+    transceiver_subsystem: TransceiverSubsystem,
+    data_channel: Arc<RTCDataChannel>,
+) {
+    match transceiver_subsystem {
+        TransceiverSubsystem::Vfo { id } => {
+            let Some(mode_value) = hamlib_mode_to_trx_vfo_mode(&mode) else {
+                error!("Received unsupported hamlib mode update for VFO {id}: {mode}");
+                return;
+            };
+
+            let message = AgentControlMessage {
+                message: Some(Transceiver(
+                    qsp_proto_files::qsp::message::v1::TransceiverMessage {
+                        transceiver_message: Some(ModeMessage(TrxMode {
+                            vfo_id: id as u32,
+                            mode: mode_value as i32,
+                        })),
+                    },
+                )),
+            };
+
+            let bytes = Bytes::from(message.encode_to_vec());
+            match data_channel.send(&bytes).await {
+                Ok(_) => debug!("Sent VFO {id} mode update to DataChannel: {mode}"),
+                Err(error) => {
+                    error!("Failed to send VFO {id} mode update to DataChannel: {error}")
+                }
+            }
+        }
+        TransceiverSubsystem::General => {
+            error!(
+                "Received unknown transceiver subsystem ({}) to set mode",
                 transceiver_subsystem
             );
         }
