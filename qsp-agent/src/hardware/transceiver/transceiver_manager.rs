@@ -71,7 +71,7 @@ impl TransceiverManager {
         let manager = Arc::new(TransceiverManager {
             hamlib,
             rig: Mutex::new(rig),
-            state: Mutex::new(TransceiverState { mainVfoFreq: 0 }),
+            state: Mutex::new(TransceiverState { main_vfo_freq: 0 }),
             state_polling_interval: Duration::from_millis(
                 configuration.transceiver.state_polling_interval_ms,
             ),
@@ -92,8 +92,8 @@ impl TransceiverManager {
         let freq = freq as u64;
 
         let mut state = self.state.lock().unwrap();
-        if state.mainVfoFreq != freq {
-            state.mainVfoFreq = freq;
+        if state.main_vfo_freq != freq {
+            state.main_vfo_freq = freq;
             updated = true;
         }
 
@@ -102,6 +102,26 @@ impl TransceiverManager {
 
     pub fn set_frequency(&self, vfo_id: u32, frequency: u64) {
         self.rig.lock().unwrap().set_freq(vfo_id, frequency as f64);
+    }
+
+    pub fn set_mode(&self, vfo_id: u32, mode: &str) -> Result<(), IOError> {
+        self.rig
+            .lock()
+            .unwrap()
+            .set_mode(vfo_id, mode)
+            .map_err(|e| IOError {
+                message: e.message.to_string(),
+            })
+    }
+
+    pub fn set_band(&self, band: &str) -> Result<(), IOError> {
+        self.rig
+            .lock()
+            .unwrap()
+            .set_band(band)
+            .map_err(|e| IOError {
+                message: e.message.to_string(),
+            })
     }
 
     pub fn add_state_update_receiver(&self) -> UnboundedReceiver<TransceiverStateMessage> {
@@ -115,7 +135,7 @@ impl TransceiverManager {
         self.send_state_update(TransceiverStateMessage {
             subsystem: TransceiverSubsystem::Vfo { id: 0 },
             parameter: TransceiverParameter::Frequency {
-                freq: state.mainVfoFreq,
+                freq: state.main_vfo_freq,
             },
         });
     }

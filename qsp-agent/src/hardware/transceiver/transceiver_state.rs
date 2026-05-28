@@ -17,7 +17,7 @@ use std::fmt;
 
 #[derive(Clone)]
 pub struct TransceiverState {
-    pub mainVfoFreq: u64,
+    pub main_vfo_freq: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

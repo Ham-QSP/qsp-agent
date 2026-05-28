@@ -14,8 +14,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 use crate::errors::HamLibError;
 use crate::hamlib_raw;
-use crate::hamlib_raw::{freq_t, rig_errcode_e_RIG_OK, vfo_t, RIG};
+use crate::hamlib_raw::{
+    freq_t, hamlib_bandselect_t_RIG_BANDSELECT_10M, hamlib_bandselect_t_RIG_BANDSELECT_12M,
+    hamlib_bandselect_t_RIG_BANDSELECT_13CM, hamlib_bandselect_t_RIG_BANDSELECT_15M,
+    hamlib_bandselect_t_RIG_BANDSELECT_160M, hamlib_bandselect_t_RIG_BANDSELECT_17M,
+    hamlib_bandselect_t_RIG_BANDSELECT_1_25M, hamlib_bandselect_t_RIG_BANDSELECT_20M,
+    hamlib_bandselect_t_RIG_BANDSELECT_2200M, hamlib_bandselect_t_RIG_BANDSELECT_23CM,
+    hamlib_bandselect_t_RIG_BANDSELECT_2M, hamlib_bandselect_t_RIG_BANDSELECT_30M,
+    hamlib_bandselect_t_RIG_BANDSELECT_33CM, hamlib_bandselect_t_RIG_BANDSELECT_3CM,
+    hamlib_bandselect_t_RIG_BANDSELECT_40M, hamlib_bandselect_t_RIG_BANDSELECT_4M,
+    hamlib_bandselect_t_RIG_BANDSELECT_5CM, hamlib_bandselect_t_RIG_BANDSELECT_600M,
+    hamlib_bandselect_t_RIG_BANDSELECT_60M, hamlib_bandselect_t_RIG_BANDSELECT_6M,
+    hamlib_bandselect_t_RIG_BANDSELECT_70CM, hamlib_bandselect_t_RIG_BANDSELECT_80M,
+    hamlib_bandselect_t_RIG_BANDSELECT_9CM, hamlib_bandselect_t_RIG_BANDSELECT_AIR,
+    hamlib_bandselect_t_RIG_BANDSELECT_GEN, hamlib_bandselect_t_RIG_BANDSELECT_MW,
+    hamlib_bandselect_t_RIG_BANDSELECT_WFM, pbwidth_t, rig_errcode_e_RIG_OK,
+    rig_parm_e_RIG_PARM_BANDSELECT, rmode_t, value_t, vfo_t, RIG, RIG_MODE_NONE,
+};
 use std::ffi::c_void;
+use std::ffi::CString;
 use std::marker::PhantomData;
 use std::os::raw::{c_int, c_uint};
 pub struct CCallback<'closure> {
@@ -100,6 +117,53 @@ impl Rig {
         }
     }
 
+    pub fn set_mode(&self, vfo: u32, mode: &str) -> Result<(), HamLibError<'_>> {
+        let mode = CString::new(mode).map_err(|_| HamLibError {
+            error_code: 0,
+            message: "mode contains an interior null byte",
+        })?;
+
+        unsafe {
+            let mode: rmode_t = hamlib_raw::rig_parse_mode(mode.as_ptr());
+            if mode == RIG_MODE_NONE as rmode_t {
+                return Err(HamLibError {
+                    error_code: 0,
+                    message: "unknown hamlib mode",
+                });
+            }
+
+            let width: pbwidth_t = hamlib_raw::rig_passband_normal(self.rig, mode);
+            let ret = hamlib_raw::rig_set_mode(self.rig, vfo, mode, width) as u32;
+            if ret == rig_errcode_e_RIG_OK {
+                Ok(())
+            } else {
+                Err(HamLibError::from_hamlib_error_code(ret))
+            }
+        }
+    }
+
+    pub fn set_band_select(&self, band: u32) -> Result<(), HamLibError<'_>> {
+        unsafe {
+            let value = value_t { i: band as i32 };
+            let ret =
+                hamlib_raw::rig_set_parm(self.rig, rig_parm_e_RIG_PARM_BANDSELECT as u64, value)
+                    as u32;
+            if ret == rig_errcode_e_RIG_OK {
+                Ok(())
+            } else {
+                Err(HamLibError::from_hamlib_error_code(ret))
+            }
+        }
+    }
+
+    pub fn set_band(&self, band: &str) -> Result<(), HamLibError<'_>> {
+        let band = parse_band_select(band).ok_or(HamLibError {
+            error_code: 0,
+            message: "unknown hamlib band",
+        })?;
+        self.set_band_select(band)
+    }
+
     pub fn get_freq(&self, vfo: u32) -> Result<freq_t, HamLibError<'_>> {
         unsafe {
             let mut freq: freq_t = 0.0;
@@ -111,5 +175,43 @@ impl Rig {
             }
             return Err(HamLibError::from_hamlib_error_code(ret));
         }
+    }
+}
+
+fn parse_band_select(band: &str) -> Option<u32> {
+    let normalized = band
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['_', '-', ' '], "");
+
+    match normalized.as_str() {
+        "2200m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_2200M),
+        "600m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_600M),
+        "160m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_160M),
+        "80m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_80M),
+        "60m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_60M),
+        "40m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_40M),
+        "30m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_30M),
+        "20m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_20M),
+        "17m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_17M),
+        "15m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_15M),
+        "12m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_12M),
+        "10m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_10M),
+        "6m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_6M),
+        "4m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_4M),
+        "2m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_2M),
+        "125m" | "1.25m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_1_25M),
+        "70cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_70CM),
+        "33cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_33CM),
+        "23cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_23CM),
+        "13cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_13CM),
+        "9cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_9CM),
+        "5cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_5CM),
+        "3cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_3CM),
+        "wfm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_WFM),
+        "gen" | "general" => Some(hamlib_bandselect_t_RIG_BANDSELECT_GEN),
+        "mw" => Some(hamlib_bandselect_t_RIG_BANDSELECT_MW),
+        "air" => Some(hamlib_bandselect_t_RIG_BANDSELECT_AIR),
+        _ => None,
     }
 }

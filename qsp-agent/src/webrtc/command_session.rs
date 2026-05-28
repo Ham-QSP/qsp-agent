@@ -22,7 +22,7 @@ use qsp_proto_files::qsp::message::v1::agent_control_message::Message::Transceiv
 use qsp_proto_files::qsp::message::v1::agent_message::AgentMessage as AgentPayload;
 use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage as TransceiverPayload;
 use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage::FrequencyMessage;
-use qsp_proto_files::qsp::message::v1::{AgentControlMessage, TrxFrequency};
+use qsp_proto_files::qsp::message::v1::{AgentControlMessage, Band, TrxFrequency, TrxVfoMode};
 use std::sync::Arc;
 use webrtc::data_channel::RTCDataChannel;
 
@@ -68,7 +68,7 @@ impl CommandSession {
                     }
                 }
             }
-            Some(AgentControlPayload::Transceiver(transceiver_message)) if self.hello_done => {
+            Some(Transceiver(transceiver_message)) if self.hello_done => {
                 if let Some(payload) = transceiver_message.transceiver_message.as_ref() {
                     self.command_transceiver_received(payload);
                 } else {
@@ -97,6 +97,44 @@ impl CommandSession {
                 self.transceiver_manager
                     .set_frequency(frequency.vfo_id, frequency.frequency);
             }
+            TransceiverPayload::ModeMessage(mode) => {
+                let Some(mode_name) = TrxVfoMode::try_from(mode.mode)
+                    .ok()
+                    .and_then(trx_vfo_mode_to_hamlib)
+                else {
+                    error!("Unsupported mode command received: {}", mode.mode);
+                    return;
+                };
+
+                debug!(
+                    "Mode command received for VFO {}: {}",
+                    mode.vfo_id, mode_name
+                );
+                if let Err(error) = self.transceiver_manager.set_mode(mode.vfo_id, mode_name) {
+                    error!(
+                        "Failed to set VFO {} mode to {}: {}",
+                        mode.vfo_id, mode_name, error.message
+                    );
+                }
+            }
+            TransceiverPayload::BandMessage(band) => {
+                let Some(band_name) = Band::try_from(band.band).ok().and_then(band_to_hamlib_band)
+                else {
+                    error!("Unsupported band command received: {}", band.band);
+                    return;
+                };
+
+                debug!(
+                    "Band command received for VFO {}: {}",
+                    band.vfo_id, band_name
+                );
+                if let Err(error) = self.transceiver_manager.set_band(band_name) {
+                    error!(
+                        "Failed to set transceiver band to {}: {}",
+                        band_name, error.message
+                    );
+                }
+            }
         }
     }
 
@@ -110,8 +148,10 @@ impl CommandSession {
             }
             Some(AgentControlPayload::Transceiver(transceiver_message)) => {
                 match transceiver_message.transceiver_message.as_ref() {
-                    Some(TransceiverPayload::FrequencyMessage(_)) => "frequency",
                     None => "transceiver_empty",
+                    Some(TransceiverPayload::FrequencyMessage(_)) => "frequency",
+                    Some(TransceiverPayload::ModeMessage(_)) => "mode",
+                    Some(TransceiverPayload::BandMessage(_)) => "band",
                 }
             }
             None => "none",
@@ -132,6 +172,76 @@ impl CommandSession {
                 }
             }
         }
+    }
+}
+
+fn trx_vfo_mode_to_hamlib(mode: TrxVfoMode) -> Option<&'static str> {
+    match mode {
+        TrxVfoMode::Unspecified => None,
+        TrxVfoMode::Cw => Some("CW"),
+        TrxVfoMode::Usb => Some("USB"),
+        TrxVfoMode::Lsb => Some("LSB"),
+        TrxVfoMode::Rtty => Some("RTTY"),
+        TrxVfoMode::Fm => Some("FM"),
+        TrxVfoMode::Wfm => Some("WFM"),
+        TrxVfoMode::Cwr => Some("CWR"),
+        TrxVfoMode::Rttyr => Some("RTTYR"),
+        TrxVfoMode::Ams => Some("AMS"),
+        TrxVfoMode::Pktlsb => Some("PKTLSB"),
+        TrxVfoMode::Pktusb => Some("PKTUSB"),
+        TrxVfoMode::Pktfm => Some("PKTFM"),
+        TrxVfoMode::Ecssusb => Some("ECSSUSB"),
+        TrxVfoMode::Exsslsb => Some("ECSSLSB"),
+        TrxVfoMode::Fax => Some("FAX"),
+        TrxVfoMode::Sam => Some("SAM"),
+        TrxVfoMode::Dsb => Some("DSB"),
+        TrxVfoMode::Fmn => Some("FMN"),
+        TrxVfoMode::Pktam => Some("PKTAM"),
+        TrxVfoMode::P25 => Some("P25"),
+        TrxVfoMode::Dstar => Some("DSTAR"),
+        TrxVfoMode::Dpmr => Some("DPMR"),
+        TrxVfoMode::Nxdnvn => Some("NXDNVN"),
+        TrxVfoMode::NxdnN => Some("NXDNN"),
+        TrxVfoMode::Dcr => Some("DCR"),
+        TrxVfoMode::Amn => Some("AMN"),
+        TrxVfoMode::Psk => Some("PSK"),
+        TrxVfoMode::Pskr => Some("PSKR"),
+        TrxVfoMode::Dd => Some("DD"),
+        TrxVfoMode::C4fm => Some("C4FM"),
+        TrxVfoMode::Pktfmn => Some("PKTFMN"),
+        TrxVfoMode::Spec => Some("SPEC"),
+        TrxVfoMode::Cwn => Some("CWN"),
+        TrxVfoMode::Am => Some("AM"),
+    }
+}
+
+fn band_to_hamlib_band(band: Band) -> Option<&'static str> {
+    match band {
+        Band::Unspecified => None,
+        Band::Band2200m => Some("2200m"),
+        Band::Band600m => Some("600m"),
+        Band::Band160m => Some("160m"),
+        Band::Band80m => Some("80m"),
+        Band::Band60m => Some("60m"),
+        Band::Band40m => Some("40m"),
+        Band::Band30m => Some("30m"),
+        Band::Band20m => Some("20m"),
+        Band::Band17m => Some("17m"),
+        Band::Band15m => Some("15m"),
+        Band::Band12m => Some("12m"),
+        Band::Band1om => Some("10m"),
+        Band::Band6m => Some("6m"),
+        Band::Band4m => Some("4m"),
+        Band::Band2m => Some("2m"),
+        Band::Band125m => Some("1.25m"),
+        Band::Band70cm => Some("70cm"),
+        Band::Band33cm => Some("33cm"),
+        Band::Band23cm => Some("23cm"),
+        Band::Band13cm => Some("13cm"),
+        Band::Band9cm => Some("9cm"),
+        Band::Band5cm => Some("5cm"),
+        Band::Band3cm => Some("3cm"),
+        Band::Band12mm => None,
     }
 }
 

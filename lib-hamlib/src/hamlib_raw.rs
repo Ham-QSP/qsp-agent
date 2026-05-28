@@ -17,5 +17,4 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(dead_code)]
-
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
