@@ -16,7 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 use crate::configuration::{Configuration, HamlibDebugLevel as ConfigHamlibDebugLevel};
 use crate::hardware::error::IOError;
 use crate::hardware::transceiver::transceiver_state::{
-    TransceiverParameter, TransceiverState, TransceiverStateMessage, TransceiverSubsystem,
+    TransceiverBand, TransceiverMode, TransceiverParameter, TransceiverState,
+    TransceiverStateMessage, TransceiverSubsystem,
 };
 use hamlib::hamlib::{Hamlib, RigDebugLevel};
 use hamlib::rig::Rig;
@@ -96,6 +97,9 @@ impl TransceiverManager {
         let mode = rig.get_mode(0).map_err(|e| IOError {
             message: e.message.to_string(),
         })?;
+        let mode = TransceiverMode::from_hamlib_name(&mode).ok_or(IOError {
+            message: format!("unsupported hamlib mode: {mode}"),
+        })?;
         let freq = freq as u64;
         drop(rig);
 
@@ -116,17 +120,21 @@ impl TransceiverManager {
         self.rig.lock().unwrap().set_freq(vfo_id, frequency as f64);
     }
 
-    pub fn set_mode(&self, vfo_id: u32, mode: &str) -> Result<(), IOError> {
+    pub fn set_mode(&self, vfo_id: u32, mode: TransceiverMode) -> Result<(), IOError> {
         self.rig
             .lock()
             .unwrap()
-            .set_mode(vfo_id, mode)
+            .set_mode(vfo_id, mode.as_hamlib_name())
             .map_err(|e| IOError {
                 message: e.message.to_string(),
             })
     }
 
-    pub fn set_band(&self, band: &str) -> Result<(), IOError> {
+    pub fn set_band(&self, band: TransceiverBand) -> Result<(), IOError> {
+        let band = band.as_hamlib_name().ok_or(IOError {
+            message: format!("unsupported hamlib band: {band:?}"),
+        })?;
+
         self.rig
             .lock()
             .unwrap()

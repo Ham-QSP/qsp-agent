@@ -14,5 +14,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
 pub mod command_session;
+mod transceiver_mapping;
 pub(crate) mod webrtc_session;
 pub(crate) mod webrtc_session_manager;

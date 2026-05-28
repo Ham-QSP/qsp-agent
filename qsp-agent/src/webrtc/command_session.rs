@@ -13,7 +13,12 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 use crate::hardware::transceiver::transceiver_manager::TransceiverManager;
-use crate::hardware::transceiver::transceiver_state::{TransceiverParameter, TransceiverSubsystem};
+use crate::hardware::transceiver::transceiver_state::{
+    TransceiverMode, TransceiverParameter, TransceiverSubsystem,
+};
+use crate::webrtc::transceiver_mapping::{
+    band_to_transceiver_band, transceiver_mode_to_trx_vfo_mode, trx_vfo_mode_to_transceiver_mode,
+};
 use bytes::Bytes;
 use log::{debug, error};
 use prost::Message;
@@ -101,40 +106,45 @@ impl CommandSession {
                     .set_frequency(frequency.vfo_id, frequency.frequency);
             }
             TransceiverPayload::ModeMessage(mode) => {
-                let Some(mode_name) = TrxVfoMode::try_from(mode.mode)
+                let Some(transceiver_mode) = TrxVfoMode::try_from(mode.mode)
                     .ok()
-                    .and_then(trx_vfo_mode_to_hamlib)
+                    .and_then(trx_vfo_mode_to_transceiver_mode)
                 else {
                     error!("Unsupported mode command received: {}", mode.mode);
                     return;
                 };
 
                 debug!(
-                    "Mode command received for VFO {}: {}",
-                    mode.vfo_id, mode_name
+                    "Mode command received for VFO {}: {:?}",
+                    mode.vfo_id, transceiver_mode
                 );
-                if let Err(error) = self.transceiver_manager.set_mode(mode.vfo_id, mode_name) {
+                if let Err(error) = self
+                    .transceiver_manager
+                    .set_mode(mode.vfo_id, transceiver_mode)
+                {
                     error!(
-                        "Failed to set VFO {} mode to {}: {}",
-                        mode.vfo_id, mode_name, error.message
+                        "Failed to set VFO {} mode to {:?}: {}",
+                        mode.vfo_id, transceiver_mode, error.message
                     );
                 }
             }
             TransceiverPayload::BandMessage(band) => {
-                let Some(band_name) = Band::try_from(band.band).ok().and_then(band_to_hamlib_band)
+                let Some(transceiver_band) = Band::try_from(band.band)
+                    .ok()
+                    .and_then(band_to_transceiver_band)
                 else {
                     error!("Unsupported band command received: {}", band.band);
                     return;
                 };
 
                 debug!(
-                    "Band command received for VFO {}: {}",
-                    band.vfo_id, band_name
+                    "Band command received for VFO {}: {:?}",
+                    band.vfo_id, transceiver_band
                 );
-                if let Err(error) = self.transceiver_manager.set_band(band_name) {
+                if let Err(error) = self.transceiver_manager.set_band(transceiver_band) {
                     error!(
-                        "Failed to set transceiver band to {}: {}",
-                        band_name, error.message
+                        "Failed to set transceiver band to {:?}: {}",
+                        transceiver_band, error.message
                     );
                 }
             }
@@ -181,116 +191,6 @@ impl CommandSession {
     }
 }
 
-fn trx_vfo_mode_to_hamlib(mode: TrxVfoMode) -> Option<&'static str> {
-    match mode {
-        TrxVfoMode::Unspecified => None,
-        TrxVfoMode::Cw => Some("CW"),
-        TrxVfoMode::Usb => Some("USB"),
-        TrxVfoMode::Lsb => Some("LSB"),
-        TrxVfoMode::Rtty => Some("RTTY"),
-        TrxVfoMode::Fm => Some("FM"),
-        TrxVfoMode::Wfm => Some("WFM"),
-        TrxVfoMode::Cwr => Some("CWR"),
-        TrxVfoMode::Rttyr => Some("RTTYR"),
-        TrxVfoMode::Ams => Some("AMS"),
-        TrxVfoMode::Pktlsb => Some("PKTLSB"),
-        TrxVfoMode::Pktusb => Some("PKTUSB"),
-        TrxVfoMode::Pktfm => Some("PKTFM"),
-        TrxVfoMode::Ecssusb => Some("ECSSUSB"),
-        TrxVfoMode::Exsslsb => Some("ECSSLSB"),
-        TrxVfoMode::Fax => Some("FAX"),
-        TrxVfoMode::Sam => Some("SAM"),
-        TrxVfoMode::Dsb => Some("DSB"),
-        TrxVfoMode::Fmn => Some("FMN"),
-        TrxVfoMode::Pktam => Some("PKTAM"),
-        TrxVfoMode::P25 => Some("P25"),
-        TrxVfoMode::Dstar => Some("DSTAR"),
-        TrxVfoMode::Dpmr => Some("DPMR"),
-        TrxVfoMode::Nxdnvn => Some("NXDNVN"),
-        TrxVfoMode::NxdnN => Some("NXDNN"),
-        TrxVfoMode::Dcr => Some("DCR"),
-        TrxVfoMode::Amn => Some("AMN"),
-        TrxVfoMode::Psk => Some("PSK"),
-        TrxVfoMode::Pskr => Some("PSKR"),
-        TrxVfoMode::Dd => Some("DD"),
-        TrxVfoMode::C4fm => Some("C4FM"),
-        TrxVfoMode::Pktfmn => Some("PKTFMN"),
-        TrxVfoMode::Spec => Some("SPEC"),
-        TrxVfoMode::Cwn => Some("CWN"),
-        TrxVfoMode::Am => Some("AM"),
-    }
-}
-
-fn hamlib_mode_to_trx_vfo_mode(mode: &str) -> Option<TrxVfoMode> {
-    match mode.trim().to_ascii_uppercase().as_str() {
-        "CW" => Some(TrxVfoMode::Cw),
-        "USB" => Some(TrxVfoMode::Usb),
-        "LSB" => Some(TrxVfoMode::Lsb),
-        "RTTY" => Some(TrxVfoMode::Rtty),
-        "FM" => Some(TrxVfoMode::Fm),
-        "WFM" => Some(TrxVfoMode::Wfm),
-        "CWR" => Some(TrxVfoMode::Cwr),
-        "RTTYR" => Some(TrxVfoMode::Rttyr),
-        "AMS" => Some(TrxVfoMode::Ams),
-        "PKTLSB" => Some(TrxVfoMode::Pktlsb),
-        "PKTUSB" => Some(TrxVfoMode::Pktusb),
-        "PKTFM" => Some(TrxVfoMode::Pktfm),
-        "ECSSUSB" => Some(TrxVfoMode::Ecssusb),
-        "ECSSLSB" => Some(TrxVfoMode::Exsslsb),
-        "FAX" => Some(TrxVfoMode::Fax),
-        "SAM" => Some(TrxVfoMode::Sam),
-        "DSB" => Some(TrxVfoMode::Dsb),
-        "FMN" => Some(TrxVfoMode::Fmn),
-        "PKTAM" => Some(TrxVfoMode::Pktam),
-        "P25" => Some(TrxVfoMode::P25),
-        "DSTAR" => Some(TrxVfoMode::Dstar),
-        "DPMR" => Some(TrxVfoMode::Dpmr),
-        "NXDNVN" => Some(TrxVfoMode::Nxdnvn),
-        "NXDNN" | "NXDN_N" => Some(TrxVfoMode::NxdnN),
-        "DCR" => Some(TrxVfoMode::Dcr),
-        "AMN" => Some(TrxVfoMode::Amn),
-        "PSK" => Some(TrxVfoMode::Psk),
-        "PSKR" => Some(TrxVfoMode::Pskr),
-        "DD" => Some(TrxVfoMode::Dd),
-        "C4FM" => Some(TrxVfoMode::C4fm),
-        "PKTFMN" => Some(TrxVfoMode::Pktfmn),
-        "SPEC" => Some(TrxVfoMode::Spec),
-        "CWN" => Some(TrxVfoMode::Cwn),
-        "AM" => Some(TrxVfoMode::Am),
-        _ => None,
-    }
-}
-
-fn band_to_hamlib_band(band: Band) -> Option<&'static str> {
-    match band {
-        Band::Unspecified => None,
-        Band::Band2200m => Some("2200m"),
-        Band::Band600m => Some("600m"),
-        Band::Band160m => Some("160m"),
-        Band::Band80m => Some("80m"),
-        Band::Band60m => Some("60m"),
-        Band::Band40m => Some("40m"),
-        Band::Band30m => Some("30m"),
-        Band::Band20m => Some("20m"),
-        Band::Band17m => Some("17m"),
-        Band::Band15m => Some("15m"),
-        Band::Band12m => Some("12m"),
-        Band::Band1om => Some("10m"),
-        Band::Band6m => Some("6m"),
-        Band::Band4m => Some("4m"),
-        Band::Band2m => Some("2m"),
-        Band::Band125m => Some("1.25m"),
-        Band::Band70cm => Some("70cm"),
-        Band::Band33cm => Some("33cm"),
-        Band::Band23cm => Some("23cm"),
-        Band::Band13cm => Some("13cm"),
-        Band::Band9cm => Some("9cm"),
-        Band::Band5cm => Some("5cm"),
-        Band::Band3cm => Some("3cm"),
-        Band::Band12mm => None,
-    }
-}
-
 async fn evt_freq_updated(
     freq: u64,
     transceiver_subsystem: TransceiverSubsystem,
@@ -327,16 +227,13 @@ async fn evt_freq_updated(
 }
 
 async fn evt_mode_updated(
-    mode: String,
+    mode: TransceiverMode,
     transceiver_subsystem: TransceiverSubsystem,
     data_channel: Arc<RTCDataChannel>,
 ) {
     match transceiver_subsystem {
         TransceiverSubsystem::Vfo { id } => {
-            let Some(mode_value) = hamlib_mode_to_trx_vfo_mode(&mode) else {
-                error!("Received unsupported hamlib mode update for VFO {id}: {mode}");
-                return;
-            };
+            let mode_value = transceiver_mode_to_trx_vfo_mode(mode);
 
             let message = AgentControlMessage {
                 message: Some(Transceiver(
@@ -351,7 +248,7 @@ async fn evt_mode_updated(
 
             let bytes = Bytes::from(message.encode_to_vec());
             match data_channel.send(&bytes).await {
-                Ok(_) => debug!("Sent VFO {id} mode update to DataChannel: {mode}"),
+                Ok(_) => debug!("Sent VFO {id} mode update to DataChannel: {mode:?}"),
                 Err(error) => {
                     error!("Failed to send VFO {id} mode update to DataChannel: {error}")
                 }
