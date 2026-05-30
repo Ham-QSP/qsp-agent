@@ -13,6 +13,7 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 use crate::errors::HamLibError;
+use crate::hamlib::{rigcaps_mapper, RigCaps};
 use crate::hamlib_raw;
 use crate::hamlib_raw::{
     freq_t, hamlib_bandselect_t_RIG_BANDSELECT_10M, hamlib_bandselect_t_RIG_BANDSELECT_12M,
@@ -98,6 +99,17 @@ unsafe impl Send for Rig {}
 pub type RigFreqCallback = fn();
 
 impl Rig {
+    pub fn caps(&self) -> Option<RigCaps> {
+        unsafe {
+            let caps = (*self.rig).caps;
+            if caps.is_null() {
+                None
+            } else {
+                Some(rigcaps_mapper(caps))
+            }
+        }
+    }
+
     pub fn set_freq_callback<F>(&self, closure: &mut F)
     where
         F: FnMut(f64, c_uint) -> c_int,

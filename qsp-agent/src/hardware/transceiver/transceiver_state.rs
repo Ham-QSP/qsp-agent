@@ -13,7 +13,10 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
+use hamlib::hamlib::RigMode;
 use std::fmt;
+
+pub type TransceiverMode = RigMode;
 
 #[derive(Clone)]
 pub struct TransceiverState {
@@ -49,125 +52,6 @@ pub enum TransceiverParameter {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TransceiverMode {
-    Cw,
-    Usb,
-    Lsb,
-    Rtty,
-    Fm,
-    Wfm,
-    Cwr,
-    Rttyr,
-    Ams,
-    Pktlsb,
-    Pktusb,
-    Pktfm,
-    Ecssusb,
-    Ecsslsb,
-    Fax,
-    Sam,
-    Dsb,
-    Fmn,
-    Pktam,
-    P25,
-    Dstar,
-    Dpmr,
-    Nxdnvn,
-    NxdnN,
-    Dcr,
-    Amn,
-    Psk,
-    Pskr,
-    Dd,
-    C4fm,
-    Pktfmn,
-    Spec,
-    Cwn,
-    Am,
-}
-
-impl TransceiverMode {
-    pub fn as_hamlib_name(self) -> &'static str {
-        match self {
-            Self::Cw => "CW",
-            Self::Usb => "USB",
-            Self::Lsb => "LSB",
-            Self::Rtty => "RTTY",
-            Self::Fm => "FM",
-            Self::Wfm => "WFM",
-            Self::Cwr => "CWR",
-            Self::Rttyr => "RTTYR",
-            Self::Ams => "AMS",
-            Self::Pktlsb => "PKTLSB",
-            Self::Pktusb => "PKTUSB",
-            Self::Pktfm => "PKTFM",
-            Self::Ecssusb => "ECSSUSB",
-            Self::Ecsslsb => "ECSSLSB",
-            Self::Fax => "FAX",
-            Self::Sam => "SAM",
-            Self::Dsb => "DSB",
-            Self::Fmn => "FMN",
-            Self::Pktam => "PKTAM",
-            Self::P25 => "P25",
-            Self::Dstar => "DSTAR",
-            Self::Dpmr => "DPMR",
-            Self::Nxdnvn => "NXDNVN",
-            Self::NxdnN => "NXDNN",
-            Self::Dcr => "DCR",
-            Self::Amn => "AMN",
-            Self::Psk => "PSK",
-            Self::Pskr => "PSKR",
-            Self::Dd => "DD",
-            Self::C4fm => "C4FM",
-            Self::Pktfmn => "PKTFMN",
-            Self::Spec => "SPEC",
-            Self::Cwn => "CWN",
-            Self::Am => "AM",
-        }
-    }
-
-    pub fn from_hamlib_name(mode: &str) -> Option<Self> {
-        match mode.trim().to_ascii_uppercase().as_str() {
-            "CW" => Some(Self::Cw),
-            "USB" => Some(Self::Usb),
-            "LSB" => Some(Self::Lsb),
-            "RTTY" => Some(Self::Rtty),
-            "FM" => Some(Self::Fm),
-            "WFM" => Some(Self::Wfm),
-            "CWR" => Some(Self::Cwr),
-            "RTTYR" => Some(Self::Rttyr),
-            "AMS" => Some(Self::Ams),
-            "PKTLSB" => Some(Self::Pktlsb),
-            "PKTUSB" => Some(Self::Pktusb),
-            "PKTFM" => Some(Self::Pktfm),
-            "ECSSUSB" => Some(Self::Ecssusb),
-            "ECSSLSB" => Some(Self::Ecsslsb),
-            "FAX" => Some(Self::Fax),
-            "SAM" => Some(Self::Sam),
-            "DSB" => Some(Self::Dsb),
-            "FMN" => Some(Self::Fmn),
-            "PKTAM" => Some(Self::Pktam),
-            "P25" => Some(Self::P25),
-            "DSTAR" => Some(Self::Dstar),
-            "DPMR" => Some(Self::Dpmr),
-            "NXDNVN" => Some(Self::Nxdnvn),
-            "NXDNN" | "NXDN_N" => Some(Self::NxdnN),
-            "DCR" => Some(Self::Dcr),
-            "AMN" => Some(Self::Amn),
-            "PSK" => Some(Self::Psk),
-            "PSKR" => Some(Self::Pskr),
-            "DD" => Some(Self::Dd),
-            "C4FM" => Some(Self::C4fm),
-            "PKTFMN" => Some(Self::Pktfmn),
-            "SPEC" => Some(Self::Spec),
-            "CWN" => Some(Self::Cwn),
-            "AM" => Some(Self::Am),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TransceiverBand {
     Band2200m,
     Band600m,
@@ -196,6 +80,43 @@ pub enum TransceiverBand {
 }
 
 impl TransceiverBand {
+    pub fn lower_frequency_hz(self) -> u64 {
+        self.frequency_range_hz().0
+    }
+
+    pub fn upper_frequency_hz(self) -> u64 {
+        self.frequency_range_hz().1
+    }
+
+    pub fn frequency_range_hz(self) -> (u64, u64) {
+        match self {
+            Self::Band2200m => (135_700, 137_800),
+            Self::Band600m => (472_000, 479_000),
+            Self::Band160m => (1_800_000, 2_000_000),
+            Self::Band80m => (3_500_000, 4_000_000),
+            Self::Band60m => (5_250_000, 5_450_000),
+            Self::Band40m => (7_000_000, 7_300_000),
+            Self::Band30m => (10_100_000, 10_150_000),
+            Self::Band20m => (14_000_000, 14_350_000),
+            Self::Band17m => (18_068_000, 18_168_000),
+            Self::Band15m => (21_000_000, 21_450_000),
+            Self::Band12m => (24_890_000, 24_990_000),
+            Self::Band10m => (28_000_000, 29_700_000),
+            Self::Band6m => (50_000_000, 54_000_000),
+            Self::Band4m => (69_900_000, 70_500_000),
+            Self::Band2m => (144_000_000, 148_000_000),
+            Self::Band125m => (219_000_000, 225_000_000),
+            Self::Band70cm => (420_000_000, 450_000_000),
+            Self::Band33cm => (902_000_000, 928_000_000),
+            Self::Band23cm => (1_240_000_000, 1_300_000_000),
+            Self::Band13cm => (2_300_000_000, 2_450_000_000),
+            Self::Band9cm => (3_300_000_000, 3_500_000_000),
+            Self::Band5cm => (5_650_000_000, 5_925_000_000),
+            Self::Band3cm => (10_000_000_000, 10_500_000_000),
+            Self::Band12mm => (24_000_000_000, 24_250_000_000),
+        }
+    }
+
     pub fn as_hamlib_name(self) -> Option<&'static str> {
         match self {
             Self::Band2200m => Some("2200m"),

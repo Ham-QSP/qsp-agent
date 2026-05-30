@@ -19,7 +19,7 @@ use crate::hardware::transceiver::transceiver_state::{
     TransceiverBand, TransceiverMode, TransceiverParameter, TransceiverState,
     TransceiverStateMessage, TransceiverSubsystem,
 };
-use hamlib::hamlib::{Hamlib, RigDebugLevel};
+use hamlib::hamlib::{Hamlib, RigCaps, RigDebugLevel};
 use hamlib::rig::Rig;
 use log::{debug, error, info, trace, warn};
 use std::sync::{Arc, Mutex};
@@ -31,6 +31,7 @@ pub struct TransceiverManager {
     hamlib: Hamlib,
     rig: Mutex<Rig>,
     state: Mutex<TransceiverState>,
+    caps: Mutex<RigCaps>,
     state_polling_interval: Duration,
     state_update_senders: Mutex<Vec<UnboundedSender<TransceiverStateMessage>>>,
 }
@@ -68,6 +69,9 @@ impl TransceiverManager {
             .map_err(|e| IOError {
                 message: e.message.to_string(),
             })?;
+        let caps = rig.caps().ok_or(IOError {
+            message: "hamlib rig caps unavailable".to_string(),
+        })?;
 
         let manager = Arc::new(TransceiverManager {
             hamlib,
@@ -76,6 +80,7 @@ impl TransceiverManager {
                 main_vfo_freq: 0,
                 main_vfo_mode: None,
             }),
+            caps: Mutex::new(caps),
             state_polling_interval: Duration::from_millis(
                 configuration.transceiver.state_polling_interval_ms,
             ),
