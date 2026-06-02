@@ -20,7 +20,8 @@ use crate::webrtc::transceiver_mapping::{
     band_to_transceiver_band, transceiver_mode_to_trx_vfo_mode, trx_vfo_mode_to_transceiver_mode,
 };
 use bytes::Bytes;
-use log::{debug, error};
+use hamlib::hamlib::{RigCaps, RigFrequencyRange};
+use log::{debug, error, warn};
 use prost::Message;
 use qsp_proto_files::qsp::message::v1::agent_control_message::Message as AgentControlPayload;
 use qsp_proto_files::qsp::message::v1::agent_control_message::Message::Transceiver;
@@ -29,7 +30,8 @@ use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage a
 use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage::FrequencyMessage;
 use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage::ModeMessage;
 use qsp_proto_files::qsp::message::v1::{
-    AgentControlMessage, Band, TrxFrequency, TrxMode, TrxVfoMode,
+    AgentControlMessage, Band, RigAntenna, RigFrequencyRange as ProtoRigFrequencyRange, RigVfoFlag,
+    TrxCapabilities, TrxFrequency, TrxMode, TrxVfoMode,
 };
 use std::sync::Arc;
 use webrtc::data_channel::RTCDataChannel;
@@ -65,6 +67,10 @@ impl CommandSession {
                         if !self.hello_done {
                             debug!("Hello received from DataChannel");
                             self.hello_done = true;
+                            tokio::spawn(CommandSession::send_transceiver_caps(
+                                self.data_channel.clone(),
+                                self.transceiver_manager.get_caps(),
+                            ));
                             tokio::spawn(CommandSession::transceiver_event_loop(
                                 self.data_channel.clone(),
                                 self.transceiver_manager.clone(),
@@ -148,6 +154,9 @@ impl CommandSession {
                     );
                 }
             }
+            TransceiverPayload::TrxCapabilities(_) => {
+                warn!("Transceiver capabilities message received from DataChannel");
+            }
         }
     }
 
@@ -162,12 +171,31 @@ impl CommandSession {
             Some(AgentControlPayload::Transceiver(transceiver_message)) => {
                 match transceiver_message.transceiver_message.as_ref() {
                     None => "transceiver_empty",
-                    Some(TransceiverPayload::FrequencyMessage(_)) => "frequency",
-                    Some(TransceiverPayload::ModeMessage(_)) => "mode",
+                    Some(FrequencyMessage(_)) => "frequency",
+                    Some(ModeMessage(_)) => "mode",
                     Some(TransceiverPayload::BandMessage(_)) => "band",
+                    Some(TransceiverPayload::TrxCapabilities(_)) => "capabilities",
                 }
             }
             None => "none",
+        }
+    }
+
+    async fn send_transceiver_caps(data_channel: Arc<RTCDataChannel>, caps: RigCaps) {
+        let message = AgentControlMessage {
+            message: Some(Transceiver(
+                qsp_proto_files::qsp::message::v1::TransceiverMessage {
+                    transceiver_message: Some(TransceiverPayload::TrxCapabilities(
+                        trx_capabilities_from_rig_caps(caps),
+                    )),
+                },
+            )),
+        };
+
+        let bytes = Bytes::from(message.encode_to_vec());
+        match data_channel.send(&bytes).await {
+            Ok(_) => debug!("Sent transceiver capabilities to DataChannel"),
+            Err(error) => error!("Failed to send transceiver capabilities to DataChannel: {error}"),
         }
     }
 
@@ -189,6 +217,122 @@ impl CommandSession {
             }
         }
     }
+}
+
+fn trx_capabilities_from_rig_caps(caps: RigCaps) -> TrxCapabilities {
+    TrxCapabilities {
+        rig_model: caps.rig_model,
+        model_name: caps.model_name,
+        manufacturer_name: caps.manufacturer_name,
+        rx_frequency_ranges: caps
+            .rx_frequency_ranges
+            .into_iter()
+            .map(proto_rig_frequency_range_from_rig_frequency_range)
+            .collect(),
+        tx_frequency_ranges: caps
+            .tx_frequency_ranges
+            .into_iter()
+            .map(proto_rig_frequency_range_from_rig_frequency_range)
+            .collect(),
+    }
+}
+
+fn proto_rig_frequency_range_from_rig_frequency_range(
+    range: RigFrequencyRange,
+) -> ProtoRigFrequencyRange {
+    ProtoRigFrequencyRange {
+        list_id: range.region as u32,
+        lower_frequency_hz: range.lower_frequency_hz,
+        upper_frequency_hz: range.upper_frequency_hz,
+        modes: range
+            .modes
+            .into_iter()
+            .map(|mode| transceiver_mode_to_trx_vfo_mode(mode) as i32)
+            .collect(),
+        vfo: rig_vfo_flags_from_hamlib_vfo(range.vfo),
+        antenna: rig_antennas_from_hamlib_antenna(range.antenna),
+        label: range.label,
+    }
+}
+
+fn rig_antennas_from_hamlib_antenna(antenna: u32) -> Vec<i32> {
+    const HAMLIB_ANTENNA_FLAGS: &[(u32, RigAntenna)] = &[
+        (1u32 << 0, RigAntenna::RigAntenna1),
+        (1u32 << 1, RigAntenna::RigAntenna2),
+        (1u32 << 2, RigAntenna::RigAntenna3),
+        (1u32 << 3, RigAntenna::RigAntenna4),
+        (1u32 << 4, RigAntenna::RigAntenna5),
+        (1u32 << 5, RigAntenna::RigAntenna6),
+        (1u32 << 6, RigAntenna::RigAntenna7),
+        (1u32 << 7, RigAntenna::RigAntenna8),
+    ];
+
+    if antenna == 0 {
+        return vec![RigAntenna::Unspecified as i32];
+    }
+
+    let known_mask = HAMLIB_ANTENNA_FLAGS
+        .iter()
+        .fold(0u32, |mask, (bit, _)| mask | *bit);
+    let unknown_mask = antenna & !known_mask;
+    if unknown_mask != 0 {
+        warn!("Unsupported Hamlib antenna flags in capabilities: 0x{unknown_mask:08x}");
+    }
+
+    HAMLIB_ANTENNA_FLAGS
+        .iter()
+        .filter_map(|(bit, antenna_flag)| {
+            if antenna & *bit != 0 {
+                Some(*antenna_flag as i32)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn rig_vfo_flags_from_hamlib_vfo(vfo: u32) -> Vec<i32> {
+    const HAMLIB_VFO_FLAGS: &[(u32, RigVfoFlag)] = &[
+        (1u32 << 0, RigVfoFlag::A),
+        (1u32 << 1, RigVfoFlag::B),
+        (1u32 << 2, RigVfoFlag::C),
+        (1u32 << 3, RigVfoFlag::SubC),
+        (1u32 << 4, RigVfoFlag::MainC),
+        (1u32 << 5, RigVfoFlag::Other),
+        (1u32 << 21, RigVfoFlag::SubA),
+        (1u32 << 22, RigVfoFlag::SubB),
+        (1u32 << 23, RigVfoFlag::MainA),
+        (1u32 << 24, RigVfoFlag::MainB),
+        (1u32 << 25, RigVfoFlag::Sub),
+        (1u32 << 26, RigVfoFlag::Main),
+        (1u32 << 27, RigVfoFlag::Vfo),
+        (1u32 << 28, RigVfoFlag::Mem),
+        (1u32 << 29, RigVfoFlag::Curr),
+        (1u32 << 30, RigVfoFlag::TxFlag),
+    ];
+
+    if vfo == 0 {
+        return vec![RigVfoFlag::Unspecified as i32];
+    }
+
+    let known_mask = HAMLIB_VFO_FLAGS
+        .iter()
+        .fold(0u32, |mask, (bit, _)| mask | *bit);
+    let unknown_mask = vfo & !known_mask;
+    if unknown_mask != 0 {
+        warn!("Unsupported Hamlib VFO flags in capabilities: 0x{unknown_mask:08x}");
+    }
+
+    HAMLIB_VFO_FLAGS
+        .iter()
+        .filter_map(|(bit, flag)| {
+            if vfo & *bit != 0 {
+                Some(*flag as i32)
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 async fn evt_freq_updated(

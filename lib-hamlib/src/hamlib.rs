@@ -14,6 +14,7 @@ use std::os::raw::c_int;
 use std::ptr::null_mut;
 use std::sync::{Mutex, OnceLock};
 
+#[derive(Clone, Debug)]
 pub struct RigCaps {
     pub rig_model: u32,
     pub model_name: String,
@@ -22,6 +23,7 @@ pub struct RigCaps {
     pub tx_frequency_ranges: Vec<RigFrequencyRange>,
 }
 
+#[derive(Clone, Debug)]
 pub struct RigFrequencyRange {
     pub region: u8,
     pub lower_frequency_hz: u64,

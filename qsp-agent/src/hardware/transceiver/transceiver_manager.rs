@@ -206,6 +206,10 @@ impl TransceiverManager {
     pub fn get_state(&self) -> TransceiverState {
         self.state.lock().unwrap().clone()
     }
+
+    pub fn get_caps(&self) -> RigCaps {
+        self.caps.lock().unwrap().clone()
+    }
 }
 
 impl From<ConfigHamlibDebugLevel> for RigDebugLevel {

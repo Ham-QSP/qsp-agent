@@ -34,7 +34,7 @@ const AGENT_TYPE_NAME: &str = "QSP Agent";
 #[tokio::main]
 async fn main() {
     env_logger::init();
-    console_subscriber::init();
+    // console_subscriber::init();
 
     let cli = command_line::Cli::parse();
 
