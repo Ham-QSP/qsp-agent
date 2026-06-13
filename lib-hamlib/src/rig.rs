@@ -30,7 +30,8 @@ use crate::hamlib_raw::{
     hamlib_bandselect_t_RIG_BANDSELECT_9CM, hamlib_bandselect_t_RIG_BANDSELECT_AIR,
     hamlib_bandselect_t_RIG_BANDSELECT_GEN, hamlib_bandselect_t_RIG_BANDSELECT_MW,
     hamlib_bandselect_t_RIG_BANDSELECT_WFM, pbwidth_t, rig_errcode_e_RIG_OK,
-    rig_parm_e_RIG_PARM_BANDSELECT, rmode_t, value_t, vfo_t, RIG, RIG_MODE_NONE,
+    rig_parm_e_RIG_PARM_BANDSELECT, rmode_t, value_t, vfo_op_t, vfo_op_t_RIG_OP_BAND_DOWN,
+    vfo_op_t_RIG_OP_BAND_UP, vfo_t, RIG, RIG_MODE_NONE,
 };
 use std::ffi::{c_void, CStr, CString};
 use std::marker::PhantomData;
@@ -90,6 +91,21 @@ impl<'closure> CCallback<'closure> {
 }
 pub struct Rig {
     pub(crate) rig: *mut RIG,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum RigVfoOperation {
+    BandUp,
+    BandDown,
+}
+
+impl RigVfoOperation {
+    fn as_hamlib_vfo_op(self) -> vfo_op_t {
+        match self {
+            Self::BandUp => vfo_op_t_RIG_OP_BAND_UP,
+            Self::BandDown => vfo_op_t_RIG_OP_BAND_DOWN,
+        }
+    }
 }
 
 // SAFETY: Rig owns an opaque hamlib handle. Callers that share it across
@@ -173,6 +189,17 @@ impl Rig {
             message: "unknown hamlib band",
         })?;
         self.set_band_select(band)
+    }
+
+    pub fn vfo_op(&self, vfo: u32, operation: RigVfoOperation) -> Result<(), HamLibError<'_>> {
+        unsafe {
+            let ret = hamlib_raw::rig_vfo_op(self.rig, vfo, operation.as_hamlib_vfo_op()) as u32;
+            if ret == rig_errcode_e_RIG_OK {
+                Ok(())
+            } else {
+                Err(HamLibError::from_hamlib_error_code(ret))
+            }
+        }
     }
 
     pub fn get_freq(&self, vfo: u32) -> Result<freq_t, HamLibError<'_>> {

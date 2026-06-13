@@ -21,6 +21,7 @@ use crate::webrtc::transceiver_mapping::{
 };
 use bytes::Bytes;
 use hamlib::hamlib::{RigCaps, RigFrequencyRange};
+use hamlib::rig::RigVfoOperation;
 use log::{debug, error, warn};
 use prost::Message;
 use qsp_proto_files::qsp::message::v1::agent_control_message::Message as AgentControlPayload;
@@ -30,8 +31,9 @@ use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage a
 use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage::FrequencyMessage;
 use qsp_proto_files::qsp::message::v1::transceiver_message::TransceiverMessage::ModeMessage;
 use qsp_proto_files::qsp::message::v1::{
-    AgentControlMessage, Band, RigAntenna, RigFrequencyRange as ProtoRigFrequencyRange, RigVfoFlag,
-    TrxCapabilities, TrxFrequency, TrxMode, TrxVfoMode,
+    AgentControlMessage, Band, RigFrequencyRangeMessage as ProtoRigFrequencyRange, TrxAntenna,
+    TrxCapabilitiesMessage, TrxFrequencyMessage, TrxModeMessage, TrxVfoFlag, TrxVfoMode,
+    TrxVfoOperation, TrxVfoOperationMessage,
 };
 use std::sync::Arc;
 use webrtc::data_channel::RTCDataChannel;
@@ -154,8 +156,29 @@ impl CommandSession {
                     );
                 }
             }
-            TransceiverPayload::TrxCapabilities(_) => {
+            TransceiverPayload::TrxCapabilitiesMessage(_) => {
                 warn!("Transceiver capabilities message received from DataChannel");
+            }
+            TransceiverPayload::TrxVfoMessage(vfo_operation) => {
+                let Some(operation) = rig_vfo_operation_from_trx_vfo_operation(vfo_operation)
+                else {
+                    error!("Unsupported or missing VFO operation command received");
+                    return;
+                };
+
+                debug!(
+                    "VFO operation command received for VFO {}: {:?}",
+                    vfo_operation.vfo_id, operation
+                );
+                if let Err(error) = self
+                    .transceiver_manager
+                    .vfo_operation(vfo_operation.vfo_id, operation)
+                {
+                    error!(
+                        "Failed to run VFO {} operation {:?}: {}",
+                        vfo_operation.vfo_id, operation, error.message
+                    );
+                }
             }
         }
     }
@@ -174,7 +197,8 @@ impl CommandSession {
                     Some(FrequencyMessage(_)) => "frequency",
                     Some(ModeMessage(_)) => "mode",
                     Some(TransceiverPayload::BandMessage(_)) => "band",
-                    Some(TransceiverPayload::TrxCapabilities(_)) => "capabilities",
+                    Some(TransceiverPayload::TrxCapabilitiesMessage(_)) => "capabilities",
+                    Some(TransceiverPayload::TrxVfoMessage(_)) => "trx_vfo",
                 }
             }
             None => "none",
@@ -185,7 +209,7 @@ impl CommandSession {
         let message = AgentControlMessage {
             message: Some(Transceiver(
                 qsp_proto_files::qsp::message::v1::TransceiverMessage {
-                    transceiver_message: Some(TransceiverPayload::TrxCapabilities(
+                    transceiver_message: Some(TransceiverPayload::TrxCapabilitiesMessage(
                         trx_capabilities_from_rig_caps(caps),
                     )),
                 },
@@ -219,8 +243,8 @@ impl CommandSession {
     }
 }
 
-fn trx_capabilities_from_rig_caps(caps: RigCaps) -> TrxCapabilities {
-    TrxCapabilities {
+fn trx_capabilities_from_rig_caps(caps: RigCaps) -> TrxCapabilitiesMessage {
+    TrxCapabilitiesMessage {
         rig_model: caps.rig_model,
         model_name: caps.model_name,
         manufacturer_name: caps.manufacturer_name,
@@ -255,20 +279,30 @@ fn proto_rig_frequency_range_from_rig_frequency_range(
     }
 }
 
+fn rig_vfo_operation_from_trx_vfo_operation(
+    message: &TrxVfoOperationMessage,
+) -> Option<RigVfoOperation> {
+    match TrxVfoOperation::try_from(message.operation).ok()? {
+        TrxVfoOperation::Unspecified => None,
+        TrxVfoOperation::BandUp => Some(RigVfoOperation::BandUp),
+        TrxVfoOperation::BandDown => Some(RigVfoOperation::BandDown),
+    }
+}
+
 fn rig_antennas_from_hamlib_antenna(antenna: u32) -> Vec<i32> {
-    const HAMLIB_ANTENNA_FLAGS: &[(u32, RigAntenna)] = &[
-        (1u32 << 0, RigAntenna::RigAntenna1),
-        (1u32 << 1, RigAntenna::RigAntenna2),
-        (1u32 << 2, RigAntenna::RigAntenna3),
-        (1u32 << 3, RigAntenna::RigAntenna4),
-        (1u32 << 4, RigAntenna::RigAntenna5),
-        (1u32 << 5, RigAntenna::RigAntenna6),
-        (1u32 << 6, RigAntenna::RigAntenna7),
-        (1u32 << 7, RigAntenna::RigAntenna8),
+    const HAMLIB_ANTENNA_FLAGS: &[(u32, TrxAntenna)] = &[
+        (1u32 << 0, TrxAntenna::TrxAntenna1),
+        (1u32 << 1, TrxAntenna::TrxAntenna2),
+        (1u32 << 2, TrxAntenna::TrxAntenna3),
+        (1u32 << 3, TrxAntenna::TrxAntenna4),
+        (1u32 << 4, TrxAntenna::TrxAntenna5),
+        (1u32 << 5, TrxAntenna::TrxAntenna6),
+        (1u32 << 6, TrxAntenna::TrxAntenna7),
+        (1u32 << 7, TrxAntenna::TrxAntenna8),
     ];
 
     if antenna == 0 {
-        return vec![RigAntenna::Unspecified as i32];
+        return vec![TrxAntenna::Unspecified as i32];
     }
 
     let known_mask = HAMLIB_ANTENNA_FLAGS
@@ -292,27 +326,27 @@ fn rig_antennas_from_hamlib_antenna(antenna: u32) -> Vec<i32> {
 }
 
 fn rig_vfo_flags_from_hamlib_vfo(vfo: u32) -> Vec<i32> {
-    const HAMLIB_VFO_FLAGS: &[(u32, RigVfoFlag)] = &[
-        (1u32 << 0, RigVfoFlag::A),
-        (1u32 << 1, RigVfoFlag::B),
-        (1u32 << 2, RigVfoFlag::C),
-        (1u32 << 3, RigVfoFlag::SubC),
-        (1u32 << 4, RigVfoFlag::MainC),
-        (1u32 << 5, RigVfoFlag::Other),
-        (1u32 << 21, RigVfoFlag::SubA),
-        (1u32 << 22, RigVfoFlag::SubB),
-        (1u32 << 23, RigVfoFlag::MainA),
-        (1u32 << 24, RigVfoFlag::MainB),
-        (1u32 << 25, RigVfoFlag::Sub),
-        (1u32 << 26, RigVfoFlag::Main),
-        (1u32 << 27, RigVfoFlag::Vfo),
-        (1u32 << 28, RigVfoFlag::Mem),
-        (1u32 << 29, RigVfoFlag::Curr),
-        (1u32 << 30, RigVfoFlag::TxFlag),
+    const HAMLIB_VFO_FLAGS: &[(u32, TrxVfoFlag)] = &[
+        (1u32 << 0, TrxVfoFlag::A),
+        (1u32 << 1, TrxVfoFlag::B),
+        (1u32 << 2, TrxVfoFlag::C),
+        (1u32 << 3, TrxVfoFlag::SubC),
+        (1u32 << 4, TrxVfoFlag::MainC),
+        (1u32 << 5, TrxVfoFlag::Other),
+        (1u32 << 21, TrxVfoFlag::SubA),
+        (1u32 << 22, TrxVfoFlag::SubB),
+        (1u32 << 23, TrxVfoFlag::MainA),
+        (1u32 << 24, TrxVfoFlag::MainB),
+        (1u32 << 25, TrxVfoFlag::Sub),
+        (1u32 << 26, TrxVfoFlag::Main),
+        (1u32 << 27, TrxVfoFlag::Vfo),
+        (1u32 << 28, TrxVfoFlag::Mem),
+        (1u32 << 29, TrxVfoFlag::Curr),
+        (1u32 << 30, TrxVfoFlag::TxFlag),
     ];
 
     if vfo == 0 {
-        return vec![RigVfoFlag::Unspecified as i32];
+        return vec![TrxVfoFlag::Unspecified as i32];
     }
 
     let known_mask = HAMLIB_VFO_FLAGS
@@ -345,7 +379,7 @@ async fn evt_freq_updated(
             let message = AgentControlMessage {
                 message: Some(Transceiver(
                     qsp_proto_files::qsp::message::v1::TransceiverMessage {
-                        transceiver_message: Some(FrequencyMessage(TrxFrequency {
+                        transceiver_message: Some(FrequencyMessage(TrxFrequencyMessage {
                             vfo_id: id as u32,
                             frequency: freq,
                         })),
@@ -382,7 +416,7 @@ async fn evt_mode_updated(
             let message = AgentControlMessage {
                 message: Some(Transceiver(
                     qsp_proto_files::qsp::message::v1::TransceiverMessage {
-                        transceiver_message: Some(ModeMessage(TrxMode {
+                        transceiver_message: Some(ModeMessage(TrxModeMessage {
                             vfo_id: id as u32,
                             mode: mode_value as i32,
                         })),

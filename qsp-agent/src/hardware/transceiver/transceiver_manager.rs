@@ -20,7 +20,7 @@ use crate::hardware::transceiver::transceiver_state::{
     TransceiverStateMessage, TransceiverSubsystem,
 };
 use hamlib::hamlib::{Hamlib, RigCaps, RigDebugLevel};
-use hamlib::rig::Rig;
+use hamlib::rig::{Rig, RigVfoOperation};
 use log::{debug, error, info, trace, warn};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -144,6 +144,16 @@ impl TransceiverManager {
             .lock()
             .unwrap()
             .set_band(band)
+            .map_err(|e| IOError {
+                message: e.message.to_string(),
+            })
+    }
+
+    pub fn vfo_operation(&self, vfo_id: u32, operation: RigVfoOperation) -> Result<(), IOError> {
+        self.rig
+            .lock()
+            .unwrap()
+            .vfo_op(vfo_id, operation)
             .map_err(|e| IOError {
                 message: e.message.to_string(),
             })

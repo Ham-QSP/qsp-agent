@@ -1947,8 +1947,8 @@ checksum = "95067976aca6421a523e491fce939a3e65249bac4b977adee0ee9771568e8aa3"
 
 [[package]]
 name = "qsp-proto-files"
-version = "0.1.5"
-source = "git+https://github.com/ham-qsp/qsp-proto-files.git?tag=v0.1.5#290268103e71d326bd017df58907da958576bee2"
+version = "0.1.7"
+source = "git+https://github.com/ham-qsp/qsp-proto-files.git?tag=v0.1.7#6b344b74dc45484158c9be6760740ece36cb6767"
 dependencies = [
  "prost",
  "prost-build",
