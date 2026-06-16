@@ -16,10 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 use crate::configuration::{Configuration, HamlibDebugLevel as ConfigHamlibDebugLevel};
 use crate::hardware::error::IOError;
 use crate::hardware::transceiver::transceiver_state::{
-    TransceiverParameter, TransceiverState, TransceiverStateMessage, TransceiverSubsystem,
+    TransceiverBand, TransceiverMode, TransceiverParameter, TransceiverState,
+    TransceiverStateMessage, TransceiverSubsystem,
 };
-use hamlib::hamlib::{Hamlib, RigDebugLevel};
-use hamlib::rig::Rig;
+use hamlib::hamlib::{Hamlib, RigCaps, RigDebugLevel};
+use hamlib::rig::{Rig, RigVfoOperation};
 use log::{debug, error, info, trace, warn};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -30,6 +31,7 @@ pub struct TransceiverManager {
     hamlib: Hamlib,
     rig: Mutex<Rig>,
     state: Mutex<TransceiverState>,
+    caps: Mutex<RigCaps>,
     state_polling_interval: Duration,
     state_update_senders: Mutex<Vec<UnboundedSender<TransceiverStateMessage>>>,
 }
@@ -67,11 +69,18 @@ impl TransceiverManager {
             .map_err(|e| IOError {
                 message: e.message.to_string(),
             })?;
+        let caps = rig.caps().ok_or(IOError {
+            message: "hamlib rig caps unavailable".to_string(),
+        })?;
 
         let manager = Arc::new(TransceiverManager {
             hamlib,
             rig: Mutex::new(rig),
-            state: Mutex::new(TransceiverState { mainVfoFreq: 0 }),
+            state: Mutex::new(TransceiverState {
+                main_vfo_freq: 0,
+                main_vfo_mode: None,
+            }),
+            caps: Mutex::new(caps),
             state_polling_interval: Duration::from_millis(
                 configuration.transceiver.state_polling_interval_ms,
             ),
@@ -86,14 +95,26 @@ impl TransceiverManager {
 
     pub fn full_state_update(&self) -> Result<bool, IOError> {
         let mut updated = false;
-        let freq = self.rig.lock().unwrap().get_freq(0).map_err(|e| IOError {
+        let rig = self.rig.lock().unwrap();
+        let freq = rig.get_freq(0).map_err(|e| IOError {
             message: e.message.to_string(),
         })?;
+        let mode = rig.get_mode(0).map_err(|e| IOError {
+            message: e.message.to_string(),
+        })?;
+        let mode = TransceiverMode::from_hamlib_name(&mode).ok_or(IOError {
+            message: format!("unsupported hamlib mode: {mode}"),
+        })?;
         let freq = freq as u64;
+        drop(rig);
 
         let mut state = self.state.lock().unwrap();
-        if state.mainVfoFreq != freq {
-            state.mainVfoFreq = freq;
+        if state.main_vfo_freq != freq {
+            state.main_vfo_freq = freq;
+            updated = true;
+        }
+        if state.main_vfo_mode.as_ref() != Some(&mode) {
+            state.main_vfo_mode = Some(mode);
             updated = true;
         }
 
@@ -102,6 +123,45 @@ impl TransceiverManager {
 
     pub fn set_frequency(&self, vfo_id: u32, frequency: u64) {
         self.rig.lock().unwrap().set_freq(vfo_id, frequency as f64);
+    }
+
+    pub fn set_mode(&self, vfo_id: u32, mode: TransceiverMode) -> Result<(), IOError> {
+        self.rig
+            .lock()
+            .unwrap()
+            .set_mode(vfo_id, mode.as_hamlib_name())
+            .map_err(|e| IOError {
+                message: e.message.to_string(),
+            })
+    }
+
+    pub fn set_band(&self, band: TransceiverBand) -> Result<(), IOError> {
+        let band = band.as_hamlib_name().ok_or(IOError {
+            message: format!("unsupported hamlib band: {band:?}"),
+        })?;
+
+        self.rig
+            .lock()
+            .unwrap()
+            .set_band(band)
+            .map_err(|e| IOError {
+                message: e.message.to_string(),
+            })
+    }
+
+    pub fn vfo_operation(&self, vfo_id: u32, operation: RigVfoOperation) -> Result<(), IOError> {
+        if !self.is_vfo_operation_supported(operation) {
+            info!("Unsupported VFO operation {:?}", operation);
+            return Ok(());
+        }
+
+        self.rig
+            .lock()
+            .unwrap()
+            .vfo_op(vfo_id, operation)
+            .map_err(|e| IOError {
+                message: e.message.to_string(),
+            })
     }
 
     pub fn add_state_update_receiver(&self) -> UnboundedReceiver<TransceiverStateMessage> {
@@ -115,9 +175,15 @@ impl TransceiverManager {
         self.send_state_update(TransceiverStateMessage {
             subsystem: TransceiverSubsystem::Vfo { id: 0 },
             parameter: TransceiverParameter::Frequency {
-                freq: state.mainVfoFreq,
+                freq: state.main_vfo_freq,
             },
         });
+        if let Some(mode) = state.main_vfo_mode {
+            self.send_state_update(TransceiverStateMessage {
+                subsystem: TransceiverSubsystem::Vfo { id: 0 },
+                parameter: TransceiverParameter::Mode { mode },
+            });
+        }
     }
 
     fn send_state_update(&self, update: TransceiverStateMessage) {
@@ -154,6 +220,14 @@ impl TransceiverManager {
 
     pub fn get_state(&self) -> TransceiverState {
         self.state.lock().unwrap().clone()
+    }
+
+    pub fn get_caps(&self) -> RigCaps {
+        self.caps.lock().unwrap().clone()
+    }
+
+    fn is_vfo_operation_supported(&self, operation: RigVfoOperation) -> bool {
+        self.caps.lock().unwrap().vfo_ops.contains(&operation)
     }
 }
 
