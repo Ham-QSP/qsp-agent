@@ -5,9 +5,9 @@ use crate::hamlib_raw::{
     rig_debug_level_e_RIG_DEBUG_CACHE, rig_debug_level_e_RIG_DEBUG_ERR,
     rig_debug_level_e_RIG_DEBUG_NONE, rig_debug_level_e_RIG_DEBUG_TRACE,
     rig_debug_level_e_RIG_DEBUG_VERBOSE, rig_debug_level_e_RIG_DEBUG_WARN, rig_errcode_e_RIG_OK,
-    rig_load_all_backends, rmode_t, RIG_CONF_END, RIG_MODE_NONE,
+    rig_load_all_backends, rmode_t, vfo_op_t, RIG_CONF_END, RIG_MODE_NONE,
 };
-use crate::rig::Rig;
+use crate::rig::{Rig, RigVfoOperation};
 use std::collections::HashMap;
 use std::ffi::{c_void, CStr, CString};
 use std::os::raw::c_int;
@@ -19,6 +19,7 @@ pub struct RigCaps {
     pub rig_model: u32,
     pub model_name: String,
     pub manufacturer_name: String,
+    pub vfo_ops: Vec<RigVfoOperation>,
     pub rx_frequency_ranges: Vec<RigFrequencyRange>,
     pub tx_frequency_ranges: Vec<RigFrequencyRange>,
 }
@@ -278,6 +279,7 @@ pub(crate) unsafe fn rigcaps_mapper(caps: *const rig_caps) -> RigCaps {
         rig_model: (*caps).rig_model,
         model_name,
         manufacturer_name,
+        vfo_ops: vfo_ops_mapper((*caps).vfo_ops),
         rx_frequency_ranges: freq_ranges_mapper(&[
             (1, &(*caps).rx_range_list1),
             (2, &(*caps).rx_range_list2),
@@ -294,6 +296,19 @@ pub(crate) unsafe fn rigcaps_mapper(caps: *const rig_caps) -> RigCaps {
         ]),
     };
     rig
+}
+
+fn vfo_ops_mapper(vfo_ops: vfo_op_t) -> Vec<RigVfoOperation> {
+    RigVfoOperation::all()
+        .iter()
+        .filter_map(|(operation, bit)| {
+            if vfo_ops & *bit == *bit {
+                Some(*operation)
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 fn freq_ranges_mapper(range_lists: &[(u8, &[freq_range_t; 30])]) -> Vec<RigFrequencyRange> {
@@ -486,5 +501,27 @@ unsafe fn rig_set_conf<'a>(
         Ok(())
     } else {
         Err(HamLibError::from_hamlib_error_code(result))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::vfo_ops_mapper;
+    use crate::hamlib_raw::{vfo_op_t_RIG_OP_BAND_UP, vfo_op_t_RIG_OP_CPY, vfo_op_t_RIG_OP_TUNE};
+    use crate::rig::RigVfoOperation;
+
+    #[test]
+    fn maps_vfo_ops_bitfield_to_enum_list() {
+        let mapped =
+            vfo_ops_mapper(vfo_op_t_RIG_OP_CPY | vfo_op_t_RIG_OP_BAND_UP | vfo_op_t_RIG_OP_TUNE);
+
+        assert_eq!(
+            mapped,
+            vec![
+                RigVfoOperation::Copy,
+                RigVfoOperation::BandUp,
+                RigVfoOperation::Tune
+            ]
+        );
     }
 }

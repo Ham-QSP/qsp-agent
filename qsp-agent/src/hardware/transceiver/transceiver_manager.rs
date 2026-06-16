@@ -150,6 +150,11 @@ impl TransceiverManager {
     }
 
     pub fn vfo_operation(&self, vfo_id: u32, operation: RigVfoOperation) -> Result<(), IOError> {
+        if !self.is_vfo_operation_supported(operation) {
+            info!("Unsupported VFO operation {:?}", operation);
+            return Ok(());
+        }
+
         self.rig
             .lock()
             .unwrap()
@@ -219,6 +224,10 @@ impl TransceiverManager {
 
     pub fn get_caps(&self) -> RigCaps {
         self.caps.lock().unwrap().clone()
+    }
+
+    fn is_vfo_operation_supported(&self, operation: RigVfoOperation) -> bool {
+        self.caps.lock().unwrap().vfo_ops.contains(&operation)
     }
 }
 
