@@ -17,12 +17,16 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Configuration {
     pub name: String,
     pub description: String,
+    #[serde(rename = "pidFile", default = "default_pid_file")]
+    pub pid_file: PathBuf,
+    #[serde(rename = "lockFile", default = "default_lock_file")]
+    pub lock_file: PathBuf,
     pub signaling_server: SignalingServer,
     pub transceiver: Transceiver,
 }
@@ -53,6 +57,14 @@ pub struct Transceiver {
 
 fn default_state_polling_interval_ms() -> u64 {
     1000
+}
+
+fn default_pid_file() -> PathBuf {
+    PathBuf::from("qsp-agent.pid")
+}
+
+fn default_lock_file() -> PathBuf {
+    PathBuf::from("qsp-agent.lock")
 }
 
 #[derive(Deserialize, Debug, Clone, Copy)]

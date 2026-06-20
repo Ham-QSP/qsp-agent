@@ -25,7 +25,15 @@ use crate::hardware::audio_io::AudioSessionManager;
 use crate::signaling::signaling_server_manager::SignalingServerManager;
 use crate::webrtc::webrtc_session_manager::WebrtcSessionManager;
 use clap::Parser;
-use log::error;
+use log::{debug, error, info};
+use nix::fcntl::{flock, open, FlockArg, OFlag};
+use nix::sys::stat::Mode;
+use nix::unistd::{close, dup2, fork, setsid, ForkResult};
+use std::fs::{self, File, OpenOptions};
+use std::io;
+use std::io::{Seek, SeekFrom, Write};
+use std::os::fd::AsRawFd;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 const APPLICATION_VERSION: &str = "0.1.0";
@@ -34,18 +42,114 @@ const AGENT_TYPE_NAME: &str = "QSP Agent";
 #[tokio::main]
 async fn main() {
     env_logger::init();
-    // console_subscriber::init();
-
     let cli = command_line::Cli::parse();
-
-    let config_path = cli.config.unwrap_or("config.toml".parse().unwrap());
-
-    match configuration::load_config(config_path) {
-        Ok(config) => {
-            start_server(config).await;
+    let config_path = cli.config.clone().unwrap_or("config.toml".parse().unwrap());
+    let config = match configuration::load_config(config_path) {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("Failed to load configuration: {error}");
+            return;
         }
-        Err(e) => error!("Failed to load configuration: {}", e),
+    };
+
+    if let Err(error) = daemonize(&cli) {
+        eprintln!("Failed to daemonize: {error}");
+        return;
     }
+
+    let _lock_file = match lock_file(&config.lock_file) {
+        Ok(lock_file) => lock_file,
+        Err(error) => {
+            error!(
+                "Failed to lock file '{}': {}",
+                config.lock_file.display(),
+                error
+            );
+            return;
+        }
+    };
+
+    if let Err(error) = write_pid_file(&config.pid_file) {
+        error!(
+            "Failed to write PID file '{}': {}",
+            config.pid_file.display(),
+            error
+        );
+        return;
+    }
+
+    start_server(config).await;
+    debug!("End !")
+}
+
+#[cfg(unix)]
+fn daemonize(cli: &command_line::Cli) -> Result<(), io::Error> {
+    if !cli.daemon {
+        return Ok(());
+    }
+    debug!("Daemonized");
+    match unsafe { fork() }.map_err(io::Error::other)? {
+        ForkResult::Parent { .. } => std::process::exit(0),
+        ForkResult::Child => {}
+    }
+
+    setsid().map_err(io::Error::other)?;
+
+    // let devnull = open("/dev/null", OFlag::O_RDWR, Mode::empty()).map_err(io::Error::other)?;
+    // dup2(devnull, 0).map_err(io::Error::other)?;
+    // dup2(devnull, 1).map_err(io::Error::other)?;
+    // dup2(devnull, 2).map_err(io::Error::other)?;
+    // if devnull > 2 {
+    //     close(devnull).map_err(io::Error::other)?;
+    // }
+
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn daemonize(cli: &command_line::Cli) -> Result<(), io::Error> {
+    if cli.daemon {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "daemon mode is only supported on unix platforms",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn write_pid_file(path: &Path) -> Result<(), io::Error> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent)?;
+    }
+
+    fs::write(path, format!("{}\n", std::process::id()))
+}
+
+fn lock_file(path: &Path) -> Result<File, io::Error> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(path)?;
+
+    flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock).map_err(io::Error::other)?;
+    file.set_len(0)?;
+    file.seek(SeekFrom::Start(0))?;
+    file.write_all(format!("{}\n", std::process::id()).as_bytes())?;
+
+    Ok(file)
 }
 
 async fn start_server(config: Configuration) {
