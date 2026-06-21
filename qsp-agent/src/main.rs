@@ -25,7 +25,7 @@ use crate::hardware::audio_io::AudioSessionManager;
 use crate::signaling::signaling_server_manager::SignalingServerManager;
 use crate::webrtc::webrtc_session_manager::WebrtcSessionManager;
 use clap::Parser;
-use log::{debug, error, info};
+use log::{debug, error};
 use nix::fcntl::{flock, open, FlockArg, OFlag};
 use nix::sys::stat::Mode;
 use nix::unistd::{close, dup2, fork, setsid, ForkResult};
@@ -39,9 +39,7 @@ use std::sync::{Arc, Mutex};
 const APPLICATION_VERSION: &str = "0.1.0";
 const AGENT_TYPE_NAME: &str = "QSP Agent";
 
-#[tokio::main]
-async fn main() {
-    env_logger::init();
+fn main() {
     let cli = command_line::Cli::parse();
     let config_path = cli.config.clone().unwrap_or("config.toml".parse().unwrap());
     let config = match configuration::load_config(config_path) {
@@ -56,6 +54,8 @@ async fn main() {
         eprintln!("Failed to daemonize: {error}");
         return;
     }
+
+    env_logger::init();
 
     let _lock_file = match lock_file(&config.lock_file) {
         Ok(lock_file) => lock_file,
@@ -78,8 +78,19 @@ async fn main() {
         return;
     }
 
-    start_server(config).await;
-    debug!("End !")
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            error!("Failed to create Tokio runtime: {}", error);
+            return;
+        }
+    };
+
+    runtime.block_on(start_server(config));
+    debug!("End !");
 }
 
 #[cfg(unix)]
@@ -95,13 +106,13 @@ fn daemonize(cli: &command_line::Cli) -> Result<(), io::Error> {
 
     setsid().map_err(io::Error::other)?;
 
-    // let devnull = open("/dev/null", OFlag::O_RDWR, Mode::empty()).map_err(io::Error::other)?;
-    // dup2(devnull, 0).map_err(io::Error::other)?;
-    // dup2(devnull, 1).map_err(io::Error::other)?;
-    // dup2(devnull, 2).map_err(io::Error::other)?;
-    // if devnull > 2 {
-    //     close(devnull).map_err(io::Error::other)?;
-    // }
+    let devnull = open("/dev/null", OFlag::O_RDWR, Mode::empty()).map_err(io::Error::other)?;
+    dup2(devnull, 0).map_err(io::Error::other)?;
+    dup2(devnull, 1).map_err(io::Error::other)?;
+    dup2(devnull, 2).map_err(io::Error::other)?;
+    if devnull > 2 {
+        close(devnull).map_err(io::Error::other)?;
+    }
 
     Ok(())
 }
