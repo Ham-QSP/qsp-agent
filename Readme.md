@@ -8,3 +8,5 @@ By default, `qsp-agent` runs in the foreground. Use `--daemon` or `-d` to start 
 The PID file path can be configured with `pidFile`. If omitted, it defaults to `qsp-agent.pid` in the current working directory.
 
 The lock file path can be configured with `lockFile`. If omitted, it defaults to `qsp-agent.lock` in the current working directory.
+
+When running in the foreground, logs are emitted to the console. In daemon mode, logs are sent to the platform logging system: `systemd-journald` on Linux, `os_log` on macOS, and ETW on Windows.

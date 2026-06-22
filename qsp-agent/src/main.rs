@@ -25,7 +25,6 @@ use crate::hardware::audio_io::AudioSessionManager;
 use crate::signaling::signaling_server_manager::SignalingServerManager;
 use crate::webrtc::webrtc_session_manager::WebrtcSessionManager;
 use clap::Parser;
-use log::{debug, error};
 use nix::fcntl::{flock, open, FlockArg, OFlag};
 use nix::sys::stat::Mode;
 use nix::unistd::{close, dup2, fork, setsid, ForkResult};
@@ -35,6 +34,9 @@ use std::io::{Seek, SeekFrom, Write};
 use std::os::fd::AsRawFd;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use tracing::{debug, error};
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::prelude::*;
 
 const APPLICATION_VERSION: &str = "0.1.0";
 const AGENT_TYPE_NAME: &str = "QSP Agent";
@@ -55,7 +57,10 @@ fn main() {
         return;
     }
 
-    env_logger::init();
+    if let Err(error) = init_tracing(cli.daemon) {
+        eprintln!("Failed to initialize tracing: {error}");
+        return;
+    }
 
     let _lock_file = match lock_file(&config.lock_file) {
         Ok(lock_file) => lock_file,
@@ -91,6 +96,70 @@ fn main() {
 
     runtime.block_on(start_server(config));
     debug!("End !");
+}
+
+fn init_tracing(daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        tracing_subscriber::EnvFilter::builder()
+            .with_default_directive(LevelFilter::DEBUG.into())
+            .from_env_lossy()
+    });
+
+    if daemon {
+        init_daemon_tracing(filter)
+    } else {
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(tracing_subscriber::fmt::layer())
+            .try_init()?;
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn init_daemon_tracing(
+    filter: tracing_subscriber::EnvFilter,
+) -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_journald::layer()?)
+        .try_init()?;
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn init_daemon_tracing(
+    filter: tracing_subscriber::EnvFilter,
+) -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_oslog::OsLogger::new(
+            "org.ham-qsp.qsp-agent",
+            "daemon",
+        ))
+        .try_init()?;
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn init_daemon_tracing(
+    filter: tracing_subscriber::EnvFilter,
+) -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_etw::LayerBuilder::new("HamQsp.QspAgent").build()?)
+        .try_init()?;
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+fn init_daemon_tracing(
+    _filter: tracing_subscriber::EnvFilter,
+) -> Result<(), Box<dyn std::error::Error>> {
+    Err(Box::new(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "daemon tracing is not supported on this platform",
+    )))
 }
 
 #[cfg(unix)]

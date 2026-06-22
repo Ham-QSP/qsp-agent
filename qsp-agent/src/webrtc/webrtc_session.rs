@@ -18,10 +18,10 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use flume::Receiver;
-use log::{debug, error, info};
 use prost::Message;
 use qsp_proto_files::qsp::message::v1::AgentControlMessage;
 use tokio::sync::Notify;
+use tracing::{debug, error, info};
 use uuid::Uuid;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS};

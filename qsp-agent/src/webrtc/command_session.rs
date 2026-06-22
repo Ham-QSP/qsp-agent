@@ -22,7 +22,6 @@ use crate::webrtc::transceiver_mapping::{
 use bytes::Bytes;
 use hamlib::hamlib::{RigCaps, RigFrequencyRange};
 use hamlib::rig::RigVfoOperation;
-use log::{debug, error, warn};
 use prost::Message;
 use qsp_proto_files::qsp::message::v1::agent_control_message::Message as AgentControlPayload;
 use qsp_proto_files::qsp::message::v1::agent_control_message::Message::Transceiver;
@@ -36,6 +35,7 @@ use qsp_proto_files::qsp::message::v1::{
     TrxVfoOperation, TrxVfoOperationMessage,
 };
 use std::sync::Arc;
+use tracing::{debug, error, warn};
 use webrtc::data_channel::RTCDataChannel;
 
 pub struct CommandSession {

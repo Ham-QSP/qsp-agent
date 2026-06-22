@@ -15,8 +15,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 
 use std::sync::Arc;
 
-use log::error;
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "command")]
