@@ -20,7 +20,7 @@ mod hardware;
 mod signaling;
 mod webrtc;
 
-use crate::configuration::Configuration;
+use crate::configuration::{Configuration, TracingLogLevel};
 use crate::hardware::audio_io::AudioSessionManager;
 use crate::signaling::signaling_server_manager::SignalingServerManager;
 use crate::webrtc::webrtc_session_manager::WebrtcSessionManager;
@@ -35,7 +35,6 @@ use std::os::fd::AsRawFd;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tracing::{debug, error};
-use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::prelude::*;
 
 const APPLICATION_VERSION: &str = "0.1.0";
@@ -57,7 +56,7 @@ fn main() {
         return;
     }
 
-    if let Err(error) = init_tracing(cli.daemon) {
+    if let Err(error) = init_tracing(cli.daemon, config.agent_log_level) {
         eprintln!("Failed to initialize tracing: {error}");
         return;
     }
@@ -98,10 +97,13 @@ fn main() {
     debug!("End !");
 }
 
-fn init_tracing(daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn init_tracing(
+    daemon: bool,
+    log_level: TracingLogLevel,
+) -> Result<(), Box<dyn std::error::Error>> {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         tracing_subscriber::EnvFilter::builder()
-            .with_default_directive(LevelFilter::DEBUG.into())
+            .with_default_directive(default_log_directive(log_level))
             .from_env_lossy()
     });
 
@@ -113,6 +115,16 @@ fn init_tracing(daemon: bool) -> Result<(), Box<dyn std::error::Error>> {
             .with(tracing_subscriber::fmt::layer())
             .try_init()?;
         Ok(())
+    }
+}
+
+fn default_log_directive(log_level: TracingLogLevel) -> tracing_subscriber::filter::Directive {
+    match log_level {
+        TracingLogLevel::Error => tracing_subscriber::filter::LevelFilter::ERROR.into(),
+        TracingLogLevel::Warn => tracing_subscriber::filter::LevelFilter::WARN.into(),
+        TracingLogLevel::Info => tracing_subscriber::filter::LevelFilter::INFO.into(),
+        TracingLogLevel::Debug => tracing_subscriber::filter::LevelFilter::DEBUG.into(),
+        TracingLogLevel::Trace => tracing_subscriber::filter::LevelFilter::TRACE.into(),
     }
 }
 

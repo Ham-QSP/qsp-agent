@@ -10,3 +10,5 @@ The PID file path can be configured with `pidFile`. If omitted, it defaults to `
 The lock file path can be configured with `lockFile`. If omitted, it defaults to `qsp-agent.lock` in the current working directory.
 
 When running in the foreground, logs are emitted to the console. In daemon mode, logs are sent to the platform logging system: `systemd-journald` on Linux, `os_log` on macOS, and ETW on Windows.
+
+The default tracing level can be configured with `agentLogLevel` using `error`, `warn`, `info`, `debug`, or `trace`. If omitted, it defaults to `error`. `RUST_LOG` still overrides this default when set.
