@@ -16,29 +16,43 @@ use crate::errors::HamLibError;
 use crate::hamlib::{rigcaps_mapper, RigCaps};
 use crate::hamlib_raw;
 use crate::hamlib_raw::{
-    freq_t, hamlib_bandselect_t_RIG_BANDSELECT_10M, hamlib_bandselect_t_RIG_BANDSELECT_12M,
-    hamlib_bandselect_t_RIG_BANDSELECT_13CM, hamlib_bandselect_t_RIG_BANDSELECT_15M,
-    hamlib_bandselect_t_RIG_BANDSELECT_160M, hamlib_bandselect_t_RIG_BANDSELECT_17M,
-    hamlib_bandselect_t_RIG_BANDSELECT_1_25M, hamlib_bandselect_t_RIG_BANDSELECT_20M,
-    hamlib_bandselect_t_RIG_BANDSELECT_2200M, hamlib_bandselect_t_RIG_BANDSELECT_23CM,
-    hamlib_bandselect_t_RIG_BANDSELECT_2M, hamlib_bandselect_t_RIG_BANDSELECT_30M,
-    hamlib_bandselect_t_RIG_BANDSELECT_33CM, hamlib_bandselect_t_RIG_BANDSELECT_3CM,
-    hamlib_bandselect_t_RIG_BANDSELECT_40M, hamlib_bandselect_t_RIG_BANDSELECT_4M,
-    hamlib_bandselect_t_RIG_BANDSELECT_5CM, hamlib_bandselect_t_RIG_BANDSELECT_600M,
-    hamlib_bandselect_t_RIG_BANDSELECT_60M, hamlib_bandselect_t_RIG_BANDSELECT_6M,
-    hamlib_bandselect_t_RIG_BANDSELECT_70CM, hamlib_bandselect_t_RIG_BANDSELECT_80M,
-    hamlib_bandselect_t_RIG_BANDSELECT_9CM, hamlib_bandselect_t_RIG_BANDSELECT_AIR,
-    hamlib_bandselect_t_RIG_BANDSELECT_GEN, hamlib_bandselect_t_RIG_BANDSELECT_MW,
-    hamlib_bandselect_t_RIG_BANDSELECT_WFM, pbwidth_t, rig_errcode_e_RIG_OK,
-    rig_parm_e_RIG_PARM_BANDSELECT, rmode_t, value_t, vfo_op_t, vfo_op_t_RIG_OP_BAND_DOWN,
-    vfo_op_t_RIG_OP_BAND_UP, vfo_op_t_RIG_OP_CPY, vfo_op_t_RIG_OP_DOWN, vfo_op_t_RIG_OP_FROM_VFO,
-    vfo_op_t_RIG_OP_LEFT, vfo_op_t_RIG_OP_MCL, vfo_op_t_RIG_OP_RIGHT, vfo_op_t_RIG_OP_TOGGLE,
-    vfo_op_t_RIG_OP_TO_VFO, vfo_op_t_RIG_OP_TUNE, vfo_op_t_RIG_OP_UP, vfo_op_t_RIG_OP_XCHG, vfo_t,
-    RIG, RIG_MODE_NONE,
+    freq_t, pbwidth_t, rig_errcode_e_RIG_OK, rig_parm_e_RIG_PARM_BANDSELECT, rmode_t, value_t,
+    vfo_op_t, vfo_op_t_RIG_OP_BAND_DOWN, vfo_op_t_RIG_OP_BAND_UP, vfo_op_t_RIG_OP_CPY,
+    vfo_op_t_RIG_OP_DOWN, vfo_op_t_RIG_OP_FROM_VFO, vfo_op_t_RIG_OP_LEFT, vfo_op_t_RIG_OP_MCL,
+    vfo_op_t_RIG_OP_RIGHT, vfo_op_t_RIG_OP_TOGGLE, vfo_op_t_RIG_OP_TO_VFO, vfo_op_t_RIG_OP_TUNE,
+    vfo_op_t_RIG_OP_UP, vfo_op_t_RIG_OP_XCHG, vfo_t, RIG, RIG_MODE_NONE,
 };
 use std::ffi::{c_void, CStr, CString};
 use std::marker::PhantomData;
 use std::os::raw::{c_int, c_uint};
+
+const RIG_BANDSELECT_2200M: u32 = 2;
+const RIG_BANDSELECT_600M: u32 = 4;
+const RIG_BANDSELECT_160M: u32 = 8;
+const RIG_BANDSELECT_80M: u32 = 16;
+const RIG_BANDSELECT_60M: u32 = 32;
+const RIG_BANDSELECT_40M: u32 = 64;
+const RIG_BANDSELECT_30M: u32 = 128;
+const RIG_BANDSELECT_20M: u32 = 256;
+const RIG_BANDSELECT_17M: u32 = 512;
+const RIG_BANDSELECT_15M: u32 = 1024;
+const RIG_BANDSELECT_12M: u32 = 2048;
+const RIG_BANDSELECT_10M: u32 = 4096;
+const RIG_BANDSELECT_6M: u32 = 8192;
+const RIG_BANDSELECT_WFM: u32 = 16384;
+const RIG_BANDSELECT_GEN: u32 = 32768;
+const RIG_BANDSELECT_MW: u32 = 65536;
+const RIG_BANDSELECT_AIR: u32 = 131072;
+const RIG_BANDSELECT_4M: u32 = 262144;
+const RIG_BANDSELECT_2M: u32 = 524288;
+const RIG_BANDSELECT_1_25M: u32 = 1048576;
+const RIG_BANDSELECT_70CM: u32 = 2097152;
+const RIG_BANDSELECT_33CM: u32 = 4194304;
+const RIG_BANDSELECT_23CM: u32 = 8388608;
+const RIG_BANDSELECT_13CM: u32 = 16777216;
+const RIG_BANDSELECT_9CM: u32 = 33554432;
+const RIG_BANDSELECT_5CM: u32 = 67108864;
+const RIG_BANDSELECT_3CM: u32 = 134217728;
 pub struct CCallback<'closure> {
     pub function: unsafe extern "C" fn(
         arg1: *mut RIG,
@@ -80,7 +94,7 @@ impl<'closure> CCallback<'closure> {
     }
 
     unsafe extern "C" fn call_closure<F>(
-        rig: *mut RIG,
+        _rig: *mut RIG,
         vfo: vfo_t,
         freq: freq_t,
         user_data: *mut ::std::os::raw::c_void,
@@ -282,33 +296,33 @@ fn parse_band_select(band: &str) -> Option<u32> {
         .replace(['_', '-', ' '], "");
 
     match normalized.as_str() {
-        "2200m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_2200M),
-        "600m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_600M),
-        "160m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_160M),
-        "80m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_80M),
-        "60m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_60M),
-        "40m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_40M),
-        "30m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_30M),
-        "20m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_20M),
-        "17m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_17M),
-        "15m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_15M),
-        "12m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_12M),
-        "10m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_10M),
-        "6m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_6M),
-        "4m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_4M),
-        "2m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_2M),
-        "125m" | "1.25m" => Some(hamlib_bandselect_t_RIG_BANDSELECT_1_25M),
-        "70cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_70CM),
-        "33cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_33CM),
-        "23cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_23CM),
-        "13cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_13CM),
-        "9cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_9CM),
-        "5cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_5CM),
-        "3cm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_3CM),
-        "wfm" => Some(hamlib_bandselect_t_RIG_BANDSELECT_WFM),
-        "gen" | "general" => Some(hamlib_bandselect_t_RIG_BANDSELECT_GEN),
-        "mw" => Some(hamlib_bandselect_t_RIG_BANDSELECT_MW),
-        "air" => Some(hamlib_bandselect_t_RIG_BANDSELECT_AIR),
+        "2200m" => Some(RIG_BANDSELECT_2200M),
+        "600m" => Some(RIG_BANDSELECT_600M),
+        "160m" => Some(RIG_BANDSELECT_160M),
+        "80m" => Some(RIG_BANDSELECT_80M),
+        "60m" => Some(RIG_BANDSELECT_60M),
+        "40m" => Some(RIG_BANDSELECT_40M),
+        "30m" => Some(RIG_BANDSELECT_30M),
+        "20m" => Some(RIG_BANDSELECT_20M),
+        "17m" => Some(RIG_BANDSELECT_17M),
+        "15m" => Some(RIG_BANDSELECT_15M),
+        "12m" => Some(RIG_BANDSELECT_12M),
+        "10m" => Some(RIG_BANDSELECT_10M),
+        "6m" => Some(RIG_BANDSELECT_6M),
+        "4m" => Some(RIG_BANDSELECT_4M),
+        "2m" => Some(RIG_BANDSELECT_2M),
+        "125m" | "1.25m" => Some(RIG_BANDSELECT_1_25M),
+        "70cm" => Some(RIG_BANDSELECT_70CM),
+        "33cm" => Some(RIG_BANDSELECT_33CM),
+        "23cm" => Some(RIG_BANDSELECT_23CM),
+        "13cm" => Some(RIG_BANDSELECT_13CM),
+        "9cm" => Some(RIG_BANDSELECT_9CM),
+        "5cm" => Some(RIG_BANDSELECT_5CM),
+        "3cm" => Some(RIG_BANDSELECT_3CM),
+        "wfm" => Some(RIG_BANDSELECT_WFM),
+        "gen" | "general" => Some(RIG_BANDSELECT_GEN),
+        "mw" => Some(RIG_BANDSELECT_MW),
+        "air" => Some(RIG_BANDSELECT_AIR),
         _ => None,
     }
 }

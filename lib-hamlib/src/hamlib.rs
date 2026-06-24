@@ -1,7 +1,7 @@
 use crate::errors::HamLibError;
 use crate::hamlib_raw;
 use crate::hamlib_raw::{
-    freq_range_t, hamlib_token_t, rig_caps, rig_debug_level_e, rig_debug_level_e_RIG_DEBUG_BUG,
+    freq_range_t, rig_caps, rig_debug_level_e, rig_debug_level_e_RIG_DEBUG_BUG,
     rig_debug_level_e_RIG_DEBUG_CACHE, rig_debug_level_e_RIG_DEBUG_ERR,
     rig_debug_level_e_RIG_DEBUG_NONE, rig_debug_level_e_RIG_DEBUG_TRACE,
     rig_debug_level_e_RIG_DEBUG_VERBOSE, rig_debug_level_e_RIG_DEBUG_WARN, rig_errcode_e_RIG_OK,
@@ -10,9 +10,11 @@ use crate::hamlib_raw::{
 use crate::rig::{Rig, RigVfoOperation};
 use std::collections::HashMap;
 use std::ffi::{c_void, CStr, CString};
-use std::os::raw::c_int;
+use std::os::raw::{c_int, c_long};
 use std::ptr::null_mut;
 use std::sync::{Mutex, OnceLock};
+
+type HamlibToken = c_long;
 
 #[derive(Clone, Debug)]
 pub struct RigCaps {
@@ -476,10 +478,10 @@ impl Hamlib {
 unsafe fn rig_token_lookup<'a>(
     rig: *mut hamlib_raw::RIG,
     name: &str,
-) -> Result<hamlib_token_t, HamLibError<'a>> {
+) -> Result<HamlibToken, HamLibError<'a>> {
     let name = CString::new(name).unwrap();
     let token = unsafe { hamlib_raw::rig_token_lookup(rig, name.as_ptr()) };
-    if token == RIG_CONF_END as hamlib_token_t {
+    if token == RIG_CONF_END as HamlibToken {
         return Err(HamLibError {
             error_code: RIG_CONF_END,
             message: "unknown hamlib config token",
@@ -491,7 +493,7 @@ unsafe fn rig_token_lookup<'a>(
 
 unsafe fn rig_set_conf<'a>(
     rig: *mut hamlib_raw::RIG,
-    token: hamlib_token_t,
+    token: HamlibToken,
     value: &str,
 ) -> Result<(), HamLibError<'a>> {
     let value = CString::new(value).unwrap();
