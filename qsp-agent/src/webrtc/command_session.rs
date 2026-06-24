@@ -395,12 +395,6 @@ async fn evt_freq_updated(
                 }
             }
         }
-        TransceiverSubsystem::General => {
-            error!(
-                "Received unknown transceiver subsystem ({}) to set frequency",
-                transceiver_subsystem
-            );
-        }
     }
 }
 
@@ -431,12 +425,6 @@ async fn evt_mode_updated(
                     error!("Failed to send VFO {id} mode update to DataChannel: {error}")
                 }
             }
-        }
-        TransceiverSubsystem::General => {
-            error!(
-                "Received unknown transceiver subsystem ({}) to set mode",
-                transceiver_subsystem
-            );
         }
     }
 }

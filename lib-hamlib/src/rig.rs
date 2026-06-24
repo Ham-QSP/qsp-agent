@@ -16,11 +16,11 @@ use crate::errors::HamLibError;
 use crate::hamlib::{rigcaps_mapper, RigCaps};
 use crate::hamlib_raw;
 use crate::hamlib_raw::{
-    freq_t, pbwidth_t, rig_errcode_e_RIG_OK, rig_parm_e_RIG_PARM_BANDSELECT, rmode_t, value_t,
-    vfo_op_t, vfo_op_t_RIG_OP_BAND_DOWN, vfo_op_t_RIG_OP_BAND_UP, vfo_op_t_RIG_OP_CPY,
-    vfo_op_t_RIG_OP_DOWN, vfo_op_t_RIG_OP_FROM_VFO, vfo_op_t_RIG_OP_LEFT, vfo_op_t_RIG_OP_MCL,
-    vfo_op_t_RIG_OP_RIGHT, vfo_op_t_RIG_OP_TOGGLE, vfo_op_t_RIG_OP_TO_VFO, vfo_op_t_RIG_OP_TUNE,
-    vfo_op_t_RIG_OP_UP, vfo_op_t_RIG_OP_XCHG, vfo_t, RIG, RIG_MODE_NONE,
+    freq_t, pbwidth_t, rig_errcode_e_RIG_OK, rmode_t, value_t, vfo_op_t, vfo_op_t_RIG_OP_BAND_DOWN,
+    vfo_op_t_RIG_OP_BAND_UP, vfo_op_t_RIG_OP_CPY, vfo_op_t_RIG_OP_DOWN, vfo_op_t_RIG_OP_FROM_VFO,
+    vfo_op_t_RIG_OP_LEFT, vfo_op_t_RIG_OP_MCL, vfo_op_t_RIG_OP_RIGHT, vfo_op_t_RIG_OP_TOGGLE,
+    vfo_op_t_RIG_OP_TO_VFO, vfo_op_t_RIG_OP_TUNE, vfo_op_t_RIG_OP_UP, vfo_op_t_RIG_OP_XCHG, vfo_t,
+    RIG, RIG_MODE_NONE,
 };
 use std::ffi::{c_void, CStr, CString};
 use std::marker::PhantomData;
@@ -53,6 +53,7 @@ const RIG_BANDSELECT_13CM: u32 = 16777216;
 const RIG_BANDSELECT_9CM: u32 = 33554432;
 const RIG_BANDSELECT_5CM: u32 = 67108864;
 const RIG_BANDSELECT_3CM: u32 = 134217728;
+const RIG_PARM_BANDSELECT: u64 = 1024;
 pub struct CCallback<'closure> {
     pub function: unsafe extern "C" fn(
         arg1: *mut RIG,
@@ -229,9 +230,7 @@ impl Rig {
     pub fn set_band_select(&self, band: u32) -> Result<(), HamLibError<'_>> {
         unsafe {
             let value = value_t { i: band as i32 };
-            let ret =
-                hamlib_raw::rig_set_parm(self.rig, rig_parm_e_RIG_PARM_BANDSELECT as u64, value)
-                    as u32;
+            let ret = hamlib_raw::rig_set_parm(self.rig, RIG_PARM_BANDSELECT, value) as u32;
             if ret == rig_errcode_e_RIG_OK {
                 Ok(())
             } else {

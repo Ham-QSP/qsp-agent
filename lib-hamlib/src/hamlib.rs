@@ -377,6 +377,19 @@ fn label_mapper(label: *mut ::std::os::raw::c_char) -> Option<String> {
     }
 }
 
+#[cfg(target_os = "linux")]
+unsafe extern "C" fn hamlib_debug_callback_trampoline(
+    level: rig_debug_level_e,
+    _arg: *mut c_void,
+    fmt: *const ::std::os::raw::c_char,
+    ap: *mut hamlib_raw::__va_list_tag,
+) -> c_int {
+    let mut rendered = null_mut();
+    let formatted_len = unsafe { vasprintf_with_va_list(&mut rendered, fmt, ap) };
+    unsafe { dispatch_debug_message(level, rendered, formatted_len) }
+}
+
+#[cfg(not(target_os = "linux"))]
 unsafe extern "C" fn hamlib_debug_callback_trampoline(
     level: rig_debug_level_e,
     _arg: *mut c_void,
@@ -385,7 +398,14 @@ unsafe extern "C" fn hamlib_debug_callback_trampoline(
 ) -> c_int {
     let mut rendered = null_mut();
     let formatted_len = unsafe { vasprintf_with_va_list(&mut rendered, fmt, ap) };
+    unsafe { dispatch_debug_message(level, rendered, formatted_len) }
+}
 
+unsafe fn dispatch_debug_message(
+    level: rig_debug_level_e,
+    rendered: *mut ::std::os::raw::c_char,
+    formatted_len: c_int,
+) -> c_int {
     if formatted_len < 0 || rendered.is_null() {
         return formatted_len;
     }
@@ -408,9 +428,9 @@ unsafe extern "C" fn hamlib_debug_callback_trampoline(
 unsafe fn vasprintf_with_va_list(
     rendered: *mut *mut ::std::os::raw::c_char,
     fmt: *const ::std::os::raw::c_char,
-    mut ap: hamlib_raw::va_list,
+    ap: *mut hamlib_raw::__va_list_tag,
 ) -> c_int {
-    unsafe { hamlib_raw::vasprintf(rendered, fmt, ap.as_mut_ptr()) }
+    unsafe { hamlib_raw::vasprintf(rendered, fmt, ap) }
 }
 
 #[cfg(not(target_os = "linux"))]
