@@ -22,7 +22,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::Stream;
 use cpal::{SampleFormat, SampleRate, SupportedStreamConfig, SupportedStreamConfigRange};
 use flume::Receiver;
-use log::{debug, error, info};
+use tracing::{debug, error, info};
 
 pub struct AudioSessionManager {
     session: Option<AudioSession>,

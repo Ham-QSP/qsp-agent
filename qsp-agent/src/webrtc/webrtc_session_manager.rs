@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use flume::Receiver;
-use log::{debug, info};
+use tracing::{debug, info};
 
 use crate::audio::AudioEncodedFrame;
 use crate::hardware::audio_io::AudioSessionManager;

@@ -21,11 +21,11 @@ use crate::hardware::transceiver::transceiver_state::{
 };
 use hamlib::hamlib::{Hamlib, RigCaps, RigDebugLevel};
 use hamlib::rig::{Rig, RigVfoOperation};
-use log::{debug, error, info, trace, warn};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tracing::{debug, error, info, trace, warn};
 
 pub struct TransceiverManager {
     hamlib: Hamlib,

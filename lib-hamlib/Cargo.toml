@@ -2,6 +2,9 @@
 name = "hamlib"
 edition = "2021"
 
+[lib]
+doctest = false
+
 [dependencies]
 
 [build-dependencies]

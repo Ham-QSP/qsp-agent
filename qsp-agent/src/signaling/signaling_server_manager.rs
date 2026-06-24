@@ -14,8 +14,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
 use anyhow::Result;
-use log::{debug, error, info};
 use std::sync::Arc;
+use tracing::{debug, error, info};
 
 use futures_util::{future, pin_mut, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};

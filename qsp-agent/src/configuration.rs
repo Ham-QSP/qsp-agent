@@ -17,12 +17,18 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Configuration {
     pub name: String,
     pub description: String,
+    #[serde(rename = "agentLogLevel", default = "default_tracing_log_level")]
+    pub agent_log_level: TracingLogLevel,
+    #[serde(rename = "pidFile", default = "default_pid_file")]
+    pub pid_file: PathBuf,
+    #[serde(rename = "lockFile", default = "default_lock_file")]
+    pub lock_file: PathBuf,
     pub signaling_server: SignalingServer,
     pub transceiver: Transceiver,
 }
@@ -53,6 +59,41 @@ pub struct Transceiver {
 
 fn default_state_polling_interval_ms() -> u64 {
     1000
+}
+
+fn default_pid_file() -> PathBuf {
+    PathBuf::from("qsp-agent.pid")
+}
+
+fn default_lock_file() -> PathBuf {
+    PathBuf::from("qsp-agent.lock")
+}
+
+fn default_tracing_log_level() -> TracingLogLevel {
+    TracingLogLevel::Info
+}
+
+#[derive(Deserialize, Debug, Clone, Copy)]
+pub enum TracingLogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl Display for TracingLogLevel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let value = match self {
+            TracingLogLevel::Error => "error",
+            TracingLogLevel::Warn => "warn",
+            TracingLogLevel::Info => "info",
+            TracingLogLevel::Debug => "debug",
+            TracingLogLevel::Trace => "trace",
+        };
+
+        f.write_str(value)
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, Copy)]
