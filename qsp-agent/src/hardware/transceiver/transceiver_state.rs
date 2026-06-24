@@ -32,14 +32,12 @@ pub struct TransceiverStateMessage {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TransceiverSubsystem {
-    General,
     Vfo { id: u8 },
 }
 
 impl fmt::Display for TransceiverSubsystem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::General => write!(f, "general"),
             Self::Vfo { id } => write!(f, "vfo:{id}"),
         }
     }

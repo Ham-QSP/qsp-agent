@@ -384,7 +384,7 @@ unsafe extern "C" fn hamlib_debug_callback_trampoline(
     ap: hamlib_raw::va_list,
 ) -> c_int {
     let mut rendered = null_mut();
-    let formatted_len = unsafe { hamlib_raw::vasprintf(&mut rendered, fmt, ap) };
+    let formatted_len = unsafe { vasprintf_with_va_list(&mut rendered, fmt, ap) };
 
     if formatted_len < 0 || rendered.is_null() {
         return formatted_len;
@@ -402,6 +402,24 @@ unsafe extern "C" fn hamlib_debug_callback_trampoline(
     }
 
     formatted_len
+}
+
+#[cfg(target_os = "linux")]
+unsafe fn vasprintf_with_va_list(
+    rendered: *mut *mut ::std::os::raw::c_char,
+    fmt: *const ::std::os::raw::c_char,
+    mut ap: hamlib_raw::va_list,
+) -> c_int {
+    unsafe { hamlib_raw::vasprintf(rendered, fmt, ap.as_mut_ptr()) }
+}
+
+#[cfg(not(target_os = "linux"))]
+unsafe fn vasprintf_with_va_list(
+    rendered: *mut *mut ::std::os::raw::c_char,
+    fmt: *const ::std::os::raw::c_char,
+    ap: hamlib_raw::va_list,
+) -> c_int {
+    unsafe { hamlib_raw::vasprintf(rendered, fmt, ap) }
 }
 
 unsafe extern "C" {
