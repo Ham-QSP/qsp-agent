@@ -27,7 +27,7 @@ use crate::webrtc::webrtc_session::WebrtcSession;
 pub struct WebrtcSessionManager {
     sessions: Mutex<Vec<WebrtcSession>>,
     encoded_receiver: Receiver<AudioEncodedFrame>,
-    session_manager: Arc<Mutex<AudioSessionManager>>,
+    _session_manager: Arc<Mutex<AudioSessionManager>>,
     transceiver_manager: Arc<TransceiverManager>,
 }
 
@@ -38,7 +38,7 @@ impl WebrtcSessionManager {
     ) -> Self {
         Self {
             sessions: Mutex::new(Vec::new()),
-            session_manager: session_manager.clone(),
+            _session_manager: session_manager.clone(),
             encoded_receiver: session_manager.lock().unwrap().get_audio_receiver(),
             transceiver_manager,
         }

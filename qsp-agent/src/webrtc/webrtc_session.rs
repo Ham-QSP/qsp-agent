@@ -46,10 +46,10 @@ use crate::webrtc::command_session::CommandSession;
 
 pub struct WebrtcSession {
     pub agent_rtc_uuid: Arc<String>,
-    pub peer_rtc_connection: Option<Arc<RTCPeerConnection>>,
+    peer_rtc_connection: Option<Arc<RTCPeerConnection>>,
     encoded_receiver: Receiver<AudioEncodedFrame>,
     command_session: Arc<Mutex<Option<CommandSession>>>,
-    pub(crate) agent_sdp: Arc<String>,
+    pub agent_sdp: Arc<String>,
 }
 
 impl WebrtcSession {

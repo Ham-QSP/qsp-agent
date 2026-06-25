@@ -78,42 +78,6 @@ pub enum TransceiverBand {
 }
 
 impl TransceiverBand {
-    pub fn lower_frequency_hz(self) -> u64 {
-        self.frequency_range_hz().0
-    }
-
-    pub fn upper_frequency_hz(self) -> u64 {
-        self.frequency_range_hz().1
-    }
-
-    pub fn frequency_range_hz(self) -> (u64, u64) {
-        match self {
-            Self::Band2200m => (135_700, 137_800),
-            Self::Band600m => (472_000, 479_000),
-            Self::Band160m => (1_800_000, 2_000_000),
-            Self::Band80m => (3_500_000, 4_000_000),
-            Self::Band60m => (5_250_000, 5_450_000),
-            Self::Band40m => (7_000_000, 7_300_000),
-            Self::Band30m => (10_100_000, 10_150_000),
-            Self::Band20m => (14_000_000, 14_350_000),
-            Self::Band17m => (18_068_000, 18_168_000),
-            Self::Band15m => (21_000_000, 21_450_000),
-            Self::Band12m => (24_890_000, 24_990_000),
-            Self::Band10m => (28_000_000, 29_700_000),
-            Self::Band6m => (50_000_000, 54_000_000),
-            Self::Band4m => (69_900_000, 70_500_000),
-            Self::Band2m => (144_000_000, 148_000_000),
-            Self::Band125m => (219_000_000, 225_000_000),
-            Self::Band70cm => (420_000_000, 450_000_000),
-            Self::Band33cm => (902_000_000, 928_000_000),
-            Self::Band23cm => (1_240_000_000, 1_300_000_000),
-            Self::Band13cm => (2_300_000_000, 2_450_000_000),
-            Self::Band9cm => (3_300_000_000, 3_500_000_000),
-            Self::Band5cm => (5_650_000_000, 5_925_000_000),
-            Self::Band3cm => (10_000_000_000, 10_500_000_000),
-            Self::Band12mm => (24_000_000_000, 24_250_000_000),
-        }
-    }
 
     pub fn as_hamlib_name(self) -> Option<&'static str> {
         match self {

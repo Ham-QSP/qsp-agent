@@ -1,0 +1,57 @@
+# This is the QSP agent configuration file
+# Some parameters here are mandatory to have a functional setup. Check the
+# following sections and update the values.
+#
+# 1. First of all, set the signaling server credential.
+# 2. Then configure your transceiver model and connection (USB, Serial, network...)
+# 3. (Optional) Customize name and description
+
+name = "QSP Agent"
+description = "My QSP agent"
+
+# Uncomment to set the folder and name for the daemon pid file
+#pidFile = ".local/qsp-agent.pid"
+
+# Uncomment to set the folder and name for the daemon lock file
+#lockFile = ".local/qsp-agent.lock"
+
+# QSP Agent log level.
+# Allowed values: `Error`, `Warn`, `Info`, `Debug`, `Trace`
+# agentLogLevel = "Debug"
+
+###############################################################################
+# This section is the configuration to the central signal server
+# Mandatory parameters are the server url, Id and secret for authentication
+[signaling_server]
+url = "ws://myserver.to.define:/server/session"
+agentId = "AGENT_ID_REGISTRED_IN_THE_SINAGLING_SERVER"
+agentSecret = "AGENT_SECRET_CONNECTION_KEY_SET_IN_THE_SINAGLING_SERVER"
+
+# Delay between connection attempts, in seconds.
+# The last value is reused for all following retries.
+#connectionRetryDelaySeconds = [0, 1, 3, 5, 15, 30, 60]
+
+
+###############################################################################
+# This section is the configuration to the transceiver CAT control
+# It depend highly to hamlib configuration
+[transceiver]
+# Hamlib model number
+model = 1
+
+# Hamlib log level.
+# Allowed values: `None`, `Bug`, `Err`, `Warn`, `Verbose`, `Trace`, `Cache`
+#hamlibDebugLevel = "Warn"
+
+# Transceiver polling interval in milliseconds
+statePollingInterval = 1000
+
+###############################################################################
+# Transceiver connection parameters. This parameters depends of your
+# transceiver model and connection type
+# These parameters are directly hamlib configuration
+[transceiver.port]
+# Path to the port interface. i.e. USB serial port
+#rig_pathname = "/dev/ttyUSB0"
+# Serial port speed
+#serial_speed = "115200"

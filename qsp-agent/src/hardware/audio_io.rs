@@ -20,7 +20,7 @@ use crate::audio::{AudioEncodedFrame, AudioFrame};
 use bytes::Bytes;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::Stream;
-use cpal::{SampleFormat, SampleRate, SupportedStreamConfig, SupportedStreamConfigRange};
+use cpal::{SampleFormat, SupportedStreamConfig, SupportedStreamConfigRange};
 use flume::Receiver;
 use tracing::{debug, error, info};
 
@@ -83,7 +83,7 @@ impl AudioSession {
             .default_input_device()
             .expect("failed to find input device");
 
-        info!("Audio input device: {}", device.name().unwrap());
+        info!("Audio input device: {}", device.description().unwrap().name());
 
         let input_configs = match device.supported_input_configs() {
             Ok(f) => f.collect(),
@@ -107,7 +107,7 @@ impl AudioSession {
         // assume cpal::SampleFormat::F32
         let stream = device
             .build_input_stream(
-                &config.into(),
+                config.into(),
                 move |data: &[f32], _| {
                     for &sample in data {
                         buffer.push(sample.clone());
@@ -142,8 +142,8 @@ impl AudioSession {
     ) -> Option<SupportedStreamConfig> {
         return if !configs.is_empty() {
             let configs = configs.into_iter().filter(|c| {
-                return c.min_sample_rate().0 <= 48000
-                    && c.max_sample_rate().0 >= 48000
+                return c.min_sample_rate() <= 48000
+                    && c.max_sample_rate() >= 48000
                     && c.sample_format() == SampleFormat::F32
                     && c.channels() == 1;
             });
@@ -151,7 +151,7 @@ impl AudioSession {
             return x.first().map(|range| {
                 SupportedStreamConfig::new(
                     1,
-                    SampleRate(48000),
+                    48000,
                     range.buffer_size().clone(),
                     SampleFormat::F32,
                 )
