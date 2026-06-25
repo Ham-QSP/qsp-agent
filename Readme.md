@@ -12,3 +12,5 @@ The lock file path can be configured with `lockFile`. If omitted, it defaults to
 When running in the foreground, logs are emitted to the console. In daemon mode, logs are sent to the platform logging system: `systemd-journald` on Linux, `os_log` on macOS, and ETW on Windows.
 
 The default tracing level can be configured with `agentLogLevel` using `error`, `warn`, `info`, `debug`, or `trace`. If omitted, it defaults to `error`. `RUST_LOG` still overrides this default when set.
+
+The signaling server reconnection delays can be configured with `signaling_server.connectionRetryDelaySeconds`. If omitted, the default sequence is `[1, 1, 3, 5, 15, 30, 60]`, and the last value is reused for subsequent retries.
