@@ -21,9 +21,20 @@ pub mod rig;
 mod tests {
     use crate::hamlib;
     use std::collections::HashMap;
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    fn hamlib_test_guard() -> MutexGuard<'static, ()> {
+        static HAMLIB_TEST_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+
+        HAMLIB_TEST_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap()
+    }
 
     #[test]
     fn list_rigs() {
+        let _guard = hamlib_test_guard();
         let mut hamlib = hamlib::Hamlib::new();
         hamlib.list_rigs({
             |caps| {
@@ -37,6 +48,7 @@ mod tests {
 
     #[test]
     fn open_rig() {
+        let _guard = hamlib_test_guard();
         let mut hamlib = hamlib::Hamlib::new();
         let rig = hamlib.rig_connect(1, HashMap::new());
         assert!(rig.is_ok())
@@ -44,6 +56,7 @@ mod tests {
 
     #[test]
     fn get_freq() {
+        let _guard = hamlib_test_guard();
         let mut hamlib = hamlib::Hamlib::new();
         let rig = hamlib.rig_connect(1, HashMap::new()).unwrap();
         rig.set_freq(0, 100.0);
