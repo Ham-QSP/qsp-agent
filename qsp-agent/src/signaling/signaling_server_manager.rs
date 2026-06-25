@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, info};
 
-use futures_util::{future, pin_mut, StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
@@ -38,6 +38,8 @@ pub enum SignalingServerError {
     ConnectionFailed(#[from] tokio_tungstenite::tungstenite::Error),
     #[error("Can't connect the signaling server")]
     ProtocolFormatError(#[from] serde_json::Error),
+    #[error("Can't process signaling server message")]
+    MessageProcessingFailed(#[from] anyhow::Error),
 }
 
 pub struct SignalingServerSession {
@@ -111,48 +113,42 @@ impl SignalingServerManager {
         debug!("Connecting the signaling server '{}'...", url);
         let (ws_stream, _) = connect_async(&url).await?;
         debug!("WebSocket connection established");
-        let (write, read) = ws_stream.split();
+        let (mut write, mut read) = ws_stream.split();
         let session = Arc::new(SignalingServerManager::create_session(
             self.agent_description.clone(),
         ));
-        let (send_tx, send_rx) = futures_channel::mpsc::unbounded();
-        let send_to_ws = send_rx.map(Ok).forward(write);
 
-        let receive_from_ws = {
-            read.for_each(|message| async {
-                let msg_str = message.expect("Can't receive message");
-                debug!("Received message: {}", msg_str);
-                let msg = match decode_agent_message(
-                    msg_str
-                        .into_text()
-                        .expect("Can't extract message as text")
-                        .to_string(),
-                ) {
-                    Ok(msg) => msg,
-                    Err(err) => {
-                        error!("Failed to decode signaling server message: {}", err);
-                        return;
-                    }
-                };
-                let tx_message = SignalingServerManager::process_message(
-                    self.webrtc_session_manager.clone(),
-                    session.clone(),
-                    msg,
-                )
-                .await
-                .unwrap();
-                if let Some(tx_message) = tx_message {
-                    let tx_message_str =
-                        serde_json::to_string(&tx_message).expect("Serialization error");
-                    send_tx
-                        .unbounded_send(Message::Text(tx_message_str.into()))
-                        .expect("Can't send message");
+        while let Some(message) = read.next().await {
+            let message = match message {
+                Ok(message) => message,
+                Err(err) => {
+                    error!("Error receiving message from signaling server: {}", err);
+                    return Ok(());
                 }
-            })
-        };
-
-        pin_mut!(send_to_ws, receive_from_ws);
-        future::select(send_to_ws, receive_from_ws).await;
+            };
+            debug!("Received message: {}", message);
+            let message = match message.into_text() {
+                Ok(message) => message,
+                Err(err) => {
+                    error!("Error extracting signaling server message as text: {}", err);
+                    return Ok(());
+                }
+            };
+            let msg = decode_agent_message(message.to_string())?;
+            let tx_message = SignalingServerManager::process_message(
+                self.webrtc_session_manager.clone(),
+                session.clone(),
+                msg,
+            )
+            .await?;
+            if let Some(tx_message) = tx_message {
+                let tx_message_str = serde_json::to_string(&tx_message)?;
+                if let Err(err) = write.send(Message::Text(tx_message_str.into())).await {
+                    error!("Error sending message to signaling server: {}", err);
+                    return Ok(());
+                }
+            }
+        }
 
         Ok(())
     }
