@@ -40,6 +40,11 @@ pub struct SignalingServer {
     pub agent_id: String,
     #[serde(rename = "agentSecret")]
     pub agent_secret: String,
+    #[serde(
+        rename = "connectionRetryDelaySeconds",
+        default = "default_connection_retry_delay_seconds"
+    )]
+    pub connection_retry_delay_seconds: Vec<u64>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -59,6 +64,10 @@ pub struct Transceiver {
 
 fn default_state_polling_interval_ms() -> u64 {
     1000
+}
+
+fn default_connection_retry_delay_seconds() -> Vec<u64> {
+    vec![1, 1, 3, 5, 15, 30, 60]
 }
 
 fn default_pid_file() -> PathBuf {

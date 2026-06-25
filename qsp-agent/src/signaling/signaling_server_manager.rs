@@ -15,9 +15,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 
 use anyhow::Result;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::{debug, error, info};
 
 use futures_util::{future, pin_mut, StreamExt};
+use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use crate::configuration::Configuration;
@@ -46,10 +48,26 @@ pub struct SignalingServerSession {
 pub struct SignalingServerManager {
     agent_description: Arc<AgentDescription>,
     webrtc_session_manager: Arc<WebrtcSessionManager>,
+    connection_retry_delays: Arc<Vec<Duration>>,
 }
 
 impl SignalingServerManager {
     pub fn new(config: Configuration, webrtc_session_manager: Arc<WebrtcSessionManager>) -> Self {
+        let connection_retry_delays = if config
+            .signaling_server
+            .connection_retry_delay_seconds
+            .is_empty()
+        {
+            vec![Duration::from_secs(1)]
+        } else {
+            config
+                .signaling_server
+                .connection_retry_delay_seconds
+                .iter()
+                .map(|seconds| Duration::from_secs(*seconds))
+                .collect()
+        };
+
         Self {
             agent_description: Arc::new(AgentDescription {
                 agent_type: Arc::new(AGENT_TYPE_NAME.to_string()),
@@ -62,13 +80,30 @@ impl SignalingServerManager {
                 agent_secret: Arc::new(config.signaling_server.agent_secret),
             }),
             webrtc_session_manager,
+            connection_retry_delays: Arc::new(connection_retry_delays),
         }
     }
     pub async fn start(self, url: String) {
-        if let Err(e) = self.connect(url).await {
-            match e {
-                err => error!("Error processing connection: {}", err),
+        let mut failed_attempts = 0usize;
+
+        loop {
+            match self.clone().connect(url.clone()).await {
+                Ok(()) => {
+                    info!("Connection to signaling server closed. Scheduling reconnect.");
+                    failed_attempts = 0;
+                }
+                Err(err) => {
+                    error!("Error processing connection: {}", err);
+                    failed_attempts += 1;
+                }
             }
+
+            let retry_delay = self.retry_delay_for_failed_attempts(failed_attempts);
+            info!(
+                "Retrying signaling server connection in {} seconds",
+                retry_delay.as_secs()
+            );
+            sleep(retry_delay).await;
         }
     }
 
@@ -124,6 +159,14 @@ impl SignalingServerManager {
 
     fn create_session(agent_description: Arc<AgentDescription>) -> SignalingServerSession {
         SignalingServerSession { agent_description }
+    }
+
+    fn retry_delay_for_failed_attempts(&self, failed_attempts: usize) -> Duration {
+        let retry_index = failed_attempts.saturating_sub(1);
+        self.connection_retry_delays
+            .get(retry_index)
+            .copied()
+            .unwrap_or_else(|| *self.connection_retry_delays.last().unwrap())
     }
 
     async fn process_message(
