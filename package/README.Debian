@@ -1,0 +1,18 @@
+QSP Agent Debian package
+========================
+
+Installed paths:
+
+- Binary: /usr/bin/qsp-agent
+- Configuration: /etc/qsp-agent/config.toml
+- Systemd unit: /lib/systemd/system/qsp-agent.service
+- Man page: /usr/share/man/man1/qsp-agent.1.gz
+
+The package installs a dedicated `qsp-agent` system user and group.
+
+The service runs in the foreground under systemd. Do not enable the `--daemon`
+flag in the service definition.
+
+If the radio device is exposed through `/dev/tty*` or `/dev/serial/*`, the
+`qsp-agent` user may need to be added to a device access group such as
+`dialout`.

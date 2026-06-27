@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1.7
+FROM --platform=$TARGETPLATFORM rust:1.88-bookworm
+
+ENV CARGO_TERM_COLOR=always \
+    DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    dpkg-dev \
+    gzip \
+    libasound2-dev \
+    libhamlib-dev \
+    libopus-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+COPY . .
+
+RUN cargo build --release --locked -p qsp-agent
+RUN chmod +x package/build-deb.sh && package/build-deb.sh
+
+RUN mkdir -p /out && cp dist/*.deb /out/

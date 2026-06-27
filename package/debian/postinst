@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+if ! getent group qsp-agent >/dev/null 2>&1; then
+    addgroup --system qsp-agent >/dev/null
+fi
+
+if ! getent passwd qsp-agent >/dev/null 2>&1; then
+    adduser \
+        --system \
+        --ingroup qsp-agent \
+        --home /var/lib/qsp-agent \
+        --no-create-home \
+        --shell /usr/sbin/nologin \
+        qsp-agent >/dev/null
+fi
+
+install -d -m 0750 -o qsp-agent -g qsp-agent /var/lib/qsp-agent
+chown root:qsp-agent /etc/qsp-agent/config.toml
+chmod 0640 /etc/qsp-agent/config.toml
+
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload >/dev/null || true
+fi
+
+exit 0

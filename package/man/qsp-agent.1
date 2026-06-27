@@ -1,0 +1,51 @@
+.TH QSP-AGENT 1 "June 2026" "qsp-agent 0.1.0" "User Commands"
+.SH NAME
+qsp-agent \- expose a radio transceiver through the QSP signaling service
+.SH SYNOPSIS
+.B qsp-agent
+[\fB-c\fR, \fB--config\fR \fICONFIG_PATH\fR]
+[\fB-d\fR, \fB--daemon\fR]
+.SH DESCRIPTION
+.B qsp-agent
+is the QSP hardware agent. It connects a locally attached transceiver to remote
+clients through the QSP signaling server and WebRTC.
+.PP
+When managed by systemd, the service should run in the foreground. The packaged
+unit uses:
+.PP
+.B /usr/bin/qsp-agent --config /etc/qsp-agent/config.toml
+.SH OPTIONS
+.TP
+.BR -c ", " --config " " \fICONFIG_PATH\fR
+Load the application configuration from the provided TOML file.
+.TP
+.BR -d ", " --daemon
+Detach into the background. This option is intended for manual Unix daemon use
+and should not be used from systemd.
+.SH FILES
+.TP
+.B /etc/qsp-agent/config.toml
+System-wide configuration file installed by the Debian package.
+.TP
+.B /lib/systemd/system/qsp-agent.service
+Systemd unit file installed by the Debian package.
+.TP
+.B /run/qsp-agent/qsp-agent.pid
+PID file path used by the packaged configuration.
+.TP
+.B /run/qsp-agent/qsp-agent.lock
+Lock file path used by the packaged configuration.
+.SH SYSTEMD
+Enable and start the service with:
+.PP
+.EX
+systemctl enable --now qsp-agent.service
+.EE
+.PP
+Logs are written to journald and can be viewed with:
+.PP
+.EX
+journalctl -u qsp-agent.service
+.EE
+.SH AUTHOR
+Florian MAZEN
