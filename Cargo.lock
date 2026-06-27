@@ -2209,17 +2209,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "qsp-proto-files"
-version = "0.1.7"
-source = "git+https://github.com/ham-qsp/qsp-proto-files.git?tag=v0.1.7#6b344b74dc45484158c9be6760740ece36cb6767"
-dependencies = [
- "prost",
- "prost-build",
- "protoc-bin-vendored",
-]
-
-[[package]]
-name = "qsp-remote-agent"
+name = "qsp-agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2250,6 +2240,16 @@ dependencies = [
  "url",
  "uuid",
  "webrtc",
+]
+
+[[package]]
+name = "qsp-proto-files"
+version = "0.1.7"
+source = "git+https://github.com/ham-qsp/qsp-proto-files.git?tag=v0.1.7#6b344b74dc45484158c9be6760740ece36cb6767"
+dependencies = [
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
 ]
 
 [[package]]

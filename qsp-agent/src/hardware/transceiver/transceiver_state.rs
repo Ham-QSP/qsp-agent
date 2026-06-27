@@ -78,7 +78,6 @@ pub enum TransceiverBand {
 }
 
 impl TransceiverBand {
-
     pub fn as_hamlib_name(self) -> Option<&'static str> {
         match self {
             Self::Band2200m => Some("2200m"),

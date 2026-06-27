@@ -1,0 +1,11 @@
+Package: @PACKAGE_NAME@
+Version: @VERSION@
+Section: net
+Priority: optional
+Architecture: @ARCHITECTURE@
+Maintainer: Florian MAZEN
+Depends: @DEPENDENCIES@
+Homepage: https://github.com/ham-qsp/qsp-remote-agent
+Description: QSP remote radio agent daemon
+ Service daemon that connects a local radio transceiver to remote clients
+ through WebRTC using a signaling server.

@@ -83,7 +83,10 @@ impl AudioSession {
             .default_input_device()
             .expect("failed to find input device");
 
-        info!("Audio input device: {}", device.description().unwrap().name());
+        info!(
+            "Audio input device: {}",
+            device.description().unwrap().name()
+        );
 
         let input_configs = match device.supported_input_configs() {
             Ok(f) => f.collect(),
@@ -149,12 +152,7 @@ impl AudioSession {
             });
             let x: Vec<SupportedStreamConfigRange> = configs.collect();
             return x.first().map(|range| {
-                SupportedStreamConfig::new(
-                    1,
-                    48000,
-                    range.buffer_size().clone(),
-                    SampleFormat::F32,
-                )
+                SupportedStreamConfig::new(1, 48000, range.buffer_size().clone(), SampleFormat::F32)
             });
         } else {
             error!("No supported audio configs found");
