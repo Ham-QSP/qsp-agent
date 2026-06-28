@@ -1,7 +1,10 @@
 use std::env;
+use std::fs;
 use std::path::PathBuf;
 
 fn main() {
+    println!("cargo:rustc-check-cfg=cfg(hamlib_vprintf_cb_uses_va_list_pointer)");
+
     let mut builder = bindgen::Builder::default().header("wrapper.h");
 
     if let Ok(library) = pkg_config::Config::new().probe("hamlib") {
@@ -22,7 +25,17 @@ fn main() {
         .expect("Unable to generate bindings");
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let bindings_path = out_path.join("bindings.rs");
     bindings
-        .write_to_file(out_path.join("bindings.rs"))
+        .write_to_file(&bindings_path)
         .expect("Couldn't write bindings!");
+
+    let bindings_source = fs::read_to_string(&bindings_path).expect("Couldn't read bindings");
+    if let Some(vprintf_cb_pos) = bindings_source.find("pub type vprintf_cb_t") {
+        let end = (vprintf_cb_pos + 400).min(bindings_source.len());
+        let vprintf_cb_section = &bindings_source[vprintf_cb_pos..end];
+        if vprintf_cb_section.contains("arg4: *mut __va_list_tag,") {
+            println!("cargo:rustc-cfg=hamlib_vprintf_cb_uses_va_list_pointer");
+        }
+    }
 }

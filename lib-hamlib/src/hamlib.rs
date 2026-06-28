@@ -261,6 +261,12 @@ static DEBUG_CALLBACK: OnceLock<Mutex<Option<Box<dyn RigDebugCallback>>>> = Once
 
 pub type RigListCallbackFn = fn(RigCaps);
 
+#[cfg(hamlib_vprintf_cb_uses_va_list_pointer)]
+type HamlibDebugVaList = *mut hamlib_raw::__va_list_tag;
+
+#[cfg(not(hamlib_vprintf_cb_uses_va_list_pointer))]
+type HamlibDebugVaList = hamlib_raw::va_list;
+
 unsafe extern "C" fn list_rigs_callback(
     caps: *const rig_caps,
     arg2: *mut ::std::os::raw::c_void,
@@ -381,7 +387,7 @@ unsafe extern "C" fn hamlib_debug_callback_trampoline(
     level: rig_debug_level_e,
     _arg: *mut c_void,
     fmt: *const ::std::os::raw::c_char,
-    ap: hamlib_raw::va_list,
+    ap: HamlibDebugVaList,
 ) -> c_int {
     let mut rendered = null_mut();
     let formatted_len = unsafe { vasprintf_with_va_list(&mut rendered, fmt, ap) };
@@ -414,7 +420,7 @@ unsafe fn dispatch_debug_message(
 unsafe fn vasprintf_with_va_list(
     rendered: *mut *mut ::std::os::raw::c_char,
     fmt: *const ::std::os::raw::c_char,
-    ap: hamlib_raw::va_list,
+    ap: HamlibDebugVaList,
 ) -> c_int {
     unsafe { vasprintf(rendered, fmt, ap) }
 }
@@ -423,7 +429,7 @@ unsafe extern "C" {
     fn vasprintf(
         rendered: *mut *mut ::std::os::raw::c_char,
         fmt: *const ::std::os::raw::c_char,
-        ap: hamlib_raw::va_list,
+        ap: HamlibDebugVaList,
     ) -> c_int;
 
     fn free(ptr: *mut c_void);
