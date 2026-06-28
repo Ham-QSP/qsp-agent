@@ -6,9 +6,11 @@ ENV CARGO_TERM_COLOR=always \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    clang \
     dpkg-dev \
     gzip \
     libasound2-dev \
+    libclang-dev \
     libhamlib-dev \
     libopus-dev \
     pkg-config \

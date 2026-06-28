@@ -1097,6 +1097,7 @@ name = "hamlib"
 version = "0.0.0"
 dependencies = [
  "bindgen",
+ "pkg-config",
 ]
 
 [[package]]
