@@ -430,7 +430,7 @@ unsafe fn vasprintf_with_va_list(
     fmt: *const ::std::os::raw::c_char,
     ap: *mut hamlib_raw::__va_list_tag,
 ) -> c_int {
-    unsafe { hamlib_raw::vasprintf(rendered, fmt, ap) }
+    unsafe { vasprintf(rendered, fmt, ap) }
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -439,10 +439,24 @@ unsafe fn vasprintf_with_va_list(
     fmt: *const ::std::os::raw::c_char,
     ap: hamlib_raw::va_list,
 ) -> c_int {
-    unsafe { hamlib_raw::vasprintf(rendered, fmt, ap) }
+    unsafe { vasprintf(rendered, fmt, ap) }
 }
 
 unsafe extern "C" {
+    #[cfg(target_os = "linux")]
+    fn vasprintf(
+        rendered: *mut *mut ::std::os::raw::c_char,
+        fmt: *const ::std::os::raw::c_char,
+        ap: *mut hamlib_raw::__va_list_tag,
+    ) -> c_int;
+
+    #[cfg(not(target_os = "linux"))]
+    fn vasprintf(
+        rendered: *mut *mut ::std::os::raw::c_char,
+        fmt: *const ::std::os::raw::c_char,
+        ap: hamlib_raw::va_list,
+    ) -> c_int;
+
     fn free(ptr: *mut c_void);
 }
 
