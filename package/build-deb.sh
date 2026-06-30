@@ -22,33 +22,28 @@ fi
 build_root="${repo_root}/target/package/${package_name}_${version}_${architecture}"
 package_root="${build_root}/root"
 debian_dir="${package_root}/DEBIAN"
+source_debian_dir="${build_root}/debian"
+source_package_dir="${source_debian_dir}/${package_name}"
+compat_debian_dir="${repo_root}/debian"
 output_dir="${repo_root}/dist"
 
-join_dependencies() {
-    awk 'BEGIN { first = 1 } { if (!first) printf ", "; printf "%s", $0; first = 0 } END { print "" }'
-}
+cleanup_compat_debian_dir=false
+if [[ ! -e "${compat_debian_dir}" ]]; then
+    cleanup_compat_debian_dir=true
+fi
 
-shared_library_packages() {
-    local binary="$1"
-    local library
-    local package_line
-
-    ldd "${binary}" \
-        | awk '/=> \// { print $3 } /^[[:space:]]*\// { print $1 }' \
-        | while read -r library; do
-            if package_line="$(dpkg-query -S "${library}" 2>/dev/null | sed -n '1p')" \
-                && [[ -n "${package_line}" ]]
-            then
-                printf '%s\n' "${package_line%%:*}"
-            else
-                printf 'warning: no package found for shared library %s\n' "${library}" >&2
-            fi
-        done
+cleanup() {
+    if [[ "${cleanup_compat_debian_dir}" == true ]]; then
+        rm -rf "${compat_debian_dir}"
+    fi
 }
+trap cleanup EXIT
 
 rm -rf "${build_root}"
 mkdir -p \
     "${debian_dir}" \
+    "${source_debian_dir}" \
+    "${compat_debian_dir}" \
     "${package_root}/usr/bin" \
     "${package_root}/etc/qsp-agent" \
     "${package_root}/lib/systemd/system" \
@@ -74,11 +69,22 @@ install -m 0755 "${repo_root}/package/debian/postrm" "${debian_dir}/postrm"
 
 printf '/etc/qsp-agent/config.toml\n' > "${debian_dir}/conffiles"
 
+sed \
+    -e "s/@PACKAGE_NAME@/${package_name}/g" \
+    -e "s/@VERSION@/${version}/g" \
+    -e "s/@ARCHITECTURE@/${architecture}/g" \
+    -e 's/@DEPENDENCIES@/${shlibs:Depends}/g' \
+    "${repo_root}/package/debian/control.in" > "${source_debian_dir}/control"
+cp "${source_debian_dir}/control" "${compat_debian_dir}/control"
+ln -sfn "${package_root}" "${source_package_dir}"
+
 dependencies="$(
-    {
-        printf 'adduser\n'
-        shared_library_packages "${package_root}/usr/bin/${package_name}"
-    } | sort -u | join_dependencies
+    (
+        cd "${build_root}"
+        dpkg-shlibdeps \
+            -O \
+            "debian/${package_name}/usr/bin/${package_name}"
+    ) | sed -n 's/^shlibs:Depends=//p'
 )"
 
 if [[ -z "${dependencies}" ]]; then
