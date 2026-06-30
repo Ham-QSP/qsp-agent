@@ -23,6 +23,7 @@ build_root="${repo_root}/target/package/${package_name}_${version}_${architectur
 package_root="${build_root}/root"
 debian_dir="${package_root}/DEBIAN"
 source_debian_dir="${build_root}/debian"
+source_package_dir="${source_debian_dir}/${package_name}"
 compat_debian_dir="${repo_root}/debian"
 output_dir="${repo_root}/dist"
 
@@ -75,13 +76,14 @@ sed \
     -e 's/@DEPENDENCIES@/${shlibs:Depends}/g' \
     "${repo_root}/package/debian/control.in" > "${source_debian_dir}/control"
 cp "${source_debian_dir}/control" "${compat_debian_dir}/control"
+ln -sfn "${package_root}" "${source_package_dir}"
 
 dependencies="$(
     (
         cd "${build_root}"
         dpkg-shlibdeps \
             -O \
-            "root/usr/bin/${package_name}"
+            "debian/${package_name}/usr/bin/${package_name}"
     ) | sed -n 's/^shlibs:Depends=//p'
 )"
 
