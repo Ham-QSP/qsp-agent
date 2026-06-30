@@ -23,12 +23,26 @@ build_root="${repo_root}/target/package/${package_name}_${version}_${architectur
 package_root="${build_root}/root"
 debian_dir="${package_root}/DEBIAN"
 source_debian_dir="${build_root}/debian"
+compat_debian_dir="${repo_root}/debian"
 output_dir="${repo_root}/dist"
+
+cleanup_compat_debian_dir=false
+if [[ ! -e "${compat_debian_dir}" ]]; then
+    cleanup_compat_debian_dir=true
+fi
+
+cleanup() {
+    if [[ "${cleanup_compat_debian_dir}" == true ]]; then
+        rm -rf "${compat_debian_dir}"
+    fi
+}
+trap cleanup EXIT
 
 rm -rf "${build_root}"
 mkdir -p \
     "${debian_dir}" \
     "${source_debian_dir}" \
+    "${compat_debian_dir}" \
     "${package_root}/usr/bin" \
     "${package_root}/etc/qsp-agent" \
     "${package_root}/lib/systemd/system" \
@@ -60,6 +74,7 @@ sed \
     -e "s/@ARCHITECTURE@/${architecture}/g" \
     -e 's/@DEPENDENCIES@/${shlibs:Depends}/g' \
     "${repo_root}/package/debian/control.in" > "${source_debian_dir}/control"
+cp "${source_debian_dir}/control" "${compat_debian_dir}/control"
 
 dependencies="$(
     (
