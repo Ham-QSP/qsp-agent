@@ -80,6 +80,7 @@ jobs:
         run: |
           mkdir -p dist/${{ matrix.architecture }}
           docker buildx build \
+            --no-cache \
             --platform ${{ matrix.platform }} \
             --file package/Dockerfile.deb \
             --build-arg BUILD_VERSION_OVERRIDE=${{ steps.build-meta.outputs.version_override }} \

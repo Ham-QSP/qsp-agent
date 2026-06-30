@@ -30,6 +30,7 @@ RUN if [ -n "${BUILD_VERSION_OVERRIDE}" ]; then \
     fi
 
 RUN cargo build --release --locked -p qsp-agent
+RUN ! grep -n "dpkg-shlibdeps" package/build-deb.sh
 RUN chmod +x package/build-deb.sh && package/build-deb.sh
 
 RUN mkdir -p /out && cp dist/*.deb /out/
