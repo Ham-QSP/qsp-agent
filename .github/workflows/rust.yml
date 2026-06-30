@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "release" ]
     tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install build dependencies
         run: |
@@ -41,7 +41,7 @@ jobs:
 
   package-deb:
     needs: build-and-test
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/release'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -51,29 +51,44 @@ jobs:
             platform: linux/amd64
           - architecture: arm64
             platform: linux/arm64
-          - architecture: armhf
-            platform: linux/arm/v7
+#          - architecture: armhf
+#            platform: linux/arm/v7
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
+
+      - name: Compute build metadata
+        id: build-meta
+        run: |
+          base_version="$(sed -n 's/^version = "\(.*\)"/\1/p' qsp-agent/Cargo.toml | head -n 1)"
+          version_override=""
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            sanitized_tag="$(printf '%s' "${GITHUB_REF_NAME}" | tr -c '0-9A-Za-z.-' '-' | sed 's/^-*//; s/-*$//')"
+            version_override="${base_version}+${sanitized_tag}"
+          fi
+
+          echo "version_override=${version_override}" >> "${GITHUB_OUTPUT}"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build Debian package
         run: |
           mkdir -p dist/${{ matrix.architecture }}
           docker buildx build \
+            --no-cache \
             --platform ${{ matrix.platform }} \
             --file package/Dockerfile.deb \
+            --build-arg BUILD_VERSION_OVERRIDE=${{ steps.build-meta.outputs.version_override }} \
             --output type=local,dest=dist/${{ matrix.architecture }} \
             .
 
       - name: Upload Debian package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: qsp-agent-deb-${{ matrix.architecture }}
           path: dist/${{ matrix.architecture }}/*.deb
@@ -81,20 +96,38 @@ jobs:
 
   release:
     needs: package-deb
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
+      - name: Compute release metadata
+        id: release-meta
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "tag_name=${GITHUB_REF_NAME}" >> "${GITHUB_OUTPUT}"
+            echo "release_name=${GITHUB_REF_NAME}" >> "${GITHUB_OUTPUT}"
+            echo "prerelease=false" >> "${GITHUB_OUTPUT}"
+          else
+            short_sha="${GITHUB_SHA::7}"
+            echo "tag_name=release-${short_sha}" >> "${GITHUB_OUTPUT}"
+            echo "release_name=release-branch-${short_sha}" >> "${GITHUB_OUTPUT}"
+            echo "prerelease=true" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: release-artifacts
           pattern: qsp-agent-deb-*
           merge-multiple: true
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ steps.release-meta.outputs.tag_name }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.release-meta.outputs.release_name }}
+          prerelease: ${{ steps.release-meta.outputs.prerelease }}
           files: release-artifacts/*.deb
