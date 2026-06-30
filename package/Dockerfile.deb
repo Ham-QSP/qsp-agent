@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.7
 FROM --platform=$TARGETPLATFORM rust:1.88-bookworm
 
+ARG BUILD_VERSION_OVERRIDE=""
+ARG QSP_PROTO_FILES_TAG="v0.1.7"
+
 ENV CARGO_TERM_COLOR=always \
     CARGO_NET_GIT_FETCH_WITH_CLI=true \
     DEBIAN_FRONTEND=noninteractive
@@ -20,6 +23,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /workspace
 COPY . .
+
+RUN git clone --depth 1 --branch "${QSP_PROTO_FILES_TAG}" \
+      https://github.com/ham-qsp/qsp-proto-files.git \
+      /workspace/.deps/qsp-proto-files
+
+RUN if [ -n "${BUILD_VERSION_OVERRIDE}" ]; then \
+      export BUILD_VERSION_OVERRIDE && \
+      perl -0pi -e 's/^version = "[^"]+"$/version = "$ENV{BUILD_VERSION_OVERRIDE}"/m' qsp-agent/Cargo.toml && \
+      perl -0pi -e 's/(\[\[package\]\]\nname = "qsp-agent"\nversion = ")[^"]+(")/$1.$ENV{BUILD_VERSION_OVERRIDE}.$2/se' Cargo.lock; \
+    fi
+
+RUN perl -0pi -e 's#qsp-proto-files = \{ git = "https://github.com/ham-qsp/qsp-proto-files.git", tag = "v0\.1\.7" \}#qsp-proto-files = { path = "../.deps/qsp-proto-files" }#' qsp-agent/Cargo.toml && \
+    perl -0pi -e 's#(\[\[package\]\]\nname = "qsp-proto-files"\nversion = "0\.1\.7"\n)source = "git\+https://github\.com/ham-qsp/qsp-proto-files\.git\?tag=v0\.1\.7#[0-9a-f]+"\n#$1#s' Cargo.lock
 
 RUN cargo build --release --locked -p qsp-agent
 RUN chmod +x package/build-deb.sh && package/build-deb.sh

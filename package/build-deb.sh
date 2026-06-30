@@ -22,11 +22,13 @@ fi
 build_root="${repo_root}/target/package/${package_name}_${version}_${architecture}"
 package_root="${build_root}/root"
 debian_dir="${package_root}/DEBIAN"
+source_debian_dir="${build_root}/debian"
 output_dir="${repo_root}/dist"
 
 rm -rf "${build_root}"
 mkdir -p \
     "${debian_dir}" \
+    "${source_debian_dir}" \
     "${package_root}/usr/bin" \
     "${package_root}/etc/qsp-agent" \
     "${package_root}/lib/systemd/system" \
@@ -52,11 +54,20 @@ install -m 0755 "${repo_root}/package/debian/postrm" "${debian_dir}/postrm"
 
 printf '/etc/qsp-agent/config.toml\n' > "${debian_dir}/conffiles"
 
+sed \
+    -e "s/@PACKAGE_NAME@/${package_name}/g" \
+    -e "s/@VERSION@/${version}/g" \
+    -e "s/@ARCHITECTURE@/${architecture}/g" \
+    -e 's/@DEPENDENCIES@/${shlibs:Depends}/g' \
+    "${repo_root}/package/debian/control.in" > "${source_debian_dir}/control"
+
 dependencies="$(
-    dpkg-shlibdeps \
-        -O \
-        "${package_root}/usr/bin/${package_name}" \
-        | sed -n 's/^shlibs:Depends=//p'
+    (
+        cd "${build_root}"
+        dpkg-shlibdeps \
+            -O \
+            "root/usr/bin/${package_name}"
+    ) | sed -n 's/^shlibs:Depends=//p'
 )"
 
 if [[ -z "${dependencies}" ]]; then
