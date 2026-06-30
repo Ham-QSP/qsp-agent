@@ -100,7 +100,7 @@ impl AudioSession {
         debug!("Audio default input config: {:?}", config);
 
         let err_fn = move |err| {
-            warn!("an elrror occurred on stream: {}", err);
+            warn!("An error occurred on stream: {}", err);
         };
 
         let config = config.config();
