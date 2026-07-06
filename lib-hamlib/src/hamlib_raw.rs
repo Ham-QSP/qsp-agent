@@ -18,4 +18,5 @@ along with this program. If not, see <https://www.gnu.org/licenses/>
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unused_imports)]
+#![allow(unnecessary_transmutes)]
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));

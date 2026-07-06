@@ -22,7 +22,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::Stream;
 use cpal::{SampleFormat, SupportedStreamConfig, SupportedStreamConfigRange};
 use flume::Receiver;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 pub struct AudioSessionManager {
     session: Option<AudioSession>,
@@ -100,7 +100,7 @@ impl AudioSession {
         debug!("Audio default input config: {:?}", config);
 
         let err_fn = move |err| {
-            eprintln!("an error occurred on stream: {}", err);
+            warn!("An error occurred on stream: {}", err);
         };
 
         let config = config.config();

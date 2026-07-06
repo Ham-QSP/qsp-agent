@@ -24,6 +24,28 @@ package_root="${build_root}/root"
 debian_dir="${package_root}/DEBIAN"
 output_dir="${repo_root}/dist"
 
+join_dependencies() {
+    awk 'BEGIN { first = 1 } { if (!first) printf ", "; printf "%s", $0; first = 0 } END { print "" }'
+}
+
+shared_library_packages() {
+    local binary="$1"
+    local library
+    local package_line
+
+    ldd "${binary}" \
+        | awk '/=> \// { print $3 } /^[[:space:]]*\// { print $1 }' \
+        | while read -r library; do
+            if package_line="$(dpkg-query -S "${library}" 2>/dev/null | sed -n '1p')" \
+                && [[ -n "${package_line}" ]]
+            then
+                printf '%s\n' "${package_line%%:*}"
+            else
+                printf 'warning: no package found for shared library %s\n' "${library}" >&2
+            fi
+        done
+}
+
 rm -rf "${build_root}"
 mkdir -p \
     "${debian_dir}" \
@@ -53,10 +75,10 @@ install -m 0755 "${repo_root}/package/debian/postrm" "${debian_dir}/postrm"
 printf '/etc/qsp-agent/config.toml\n' > "${debian_dir}/conffiles"
 
 dependencies="$(
-    dpkg-shlibdeps \
-        -O \
-        "${package_root}/usr/bin/${package_name}" \
-        | sed -n 's/^shlibs:Depends=//p'
+    {
+        printf 'adduser\n'
+        shared_library_packages "${package_root}/usr/bin/${package_name}"
+    } | sort -u | join_dependencies
 )"
 
 if [[ -z "${dependencies}" ]]; then
