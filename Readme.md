@@ -43,6 +43,20 @@ sudo apt-get install -y --no-install-recommends \
   pkg-config
 ```
 
+For local builds on openSUSE (Tumbleweed or Leap), install:
+
+```bash
+sudo zypper install -y \
+  alsa-devel \
+  clang-devel \
+  hamlib-devel \
+  libopus-devel \
+  pkgconf-pkg-config
+```
+
+`clang-devel` provides the `libclang` library that `bindgen` needs to generate
+the Hamlib bindings.
+
 ## Build And Test
 
 Build the full workspace:
