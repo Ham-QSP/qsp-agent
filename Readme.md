@@ -43,6 +43,20 @@ sudo apt-get install -y --no-install-recommends \
   pkg-config
 ```
 
+For local builds on openSUSE (Tumbleweed or Leap), install:
+
+```bash
+sudo zypper install -y \
+  alsa-devel \
+  clang-devel \
+  hamlib-devel \
+  libopus-devel \
+  pkgconf-pkg-config
+```
+
+`clang-devel` provides the `libclang` library that `bindgen` needs to generate
+the Hamlib bindings.
+
 ## Build And Test
 
 Build the full workspace:
@@ -149,7 +163,7 @@ cargo run -p qsp-agent -- --config ./config.toml
 Or run the compiled binary directly:
 
 ```bash
-./target/debug/qsp-agent --config ./config.toml
+./target/debug/qspd --config ./config.toml
 ```
 
 ### CLI Options
@@ -170,7 +184,7 @@ If `RUST_LOG` is set, it overrides the configured default log level.
 Example:
 
 ```bash
-RUST_LOG=debug ./target/debug/qsp-agent --config ./config.toml
+RUST_LOG=debug ./target/debug/qspd --config ./config.toml
 ```
 
 ## Daemon Mode
@@ -178,7 +192,7 @@ RUST_LOG=debug ./target/debug/qsp-agent --config ./config.toml
 On Unix, the agent can detach itself with:
 
 ```bash
-./target/debug/qsp-agent --config ./config.toml --daemon
+./target/debug/qspd --config ./config.toml --daemon
 ```
 
 This mode is useful for manual deployments. When using systemd, do not use
@@ -190,10 +204,10 @@ The repository includes Debian packaging assets under `package/`.
 
 The generated package installs:
 
-- binary: `/usr/bin/qsp-agent`
+- binary: `/usr/bin/qspd`
 - configuration: `/etc/qsp-agent/config.toml`
 - systemd unit: `/lib/systemd/system/qsp-agent.service`
-- man page: `/usr/share/man/man1/qsp-agent.1.gz`
+- man page: `/usr/share/man/man1/qspd.1.gz`
 
 The package also creates a dedicated system user and group named `qsp-agent`.
 
@@ -217,7 +231,7 @@ The repository includes a packaging script:
 package/build-deb.sh
 ```
 
-It expects a release binary to already exist at `target/release/qsp-agent`.
+It expects a release binary to already exist at `target/release/qspd`.
 
 Build manually:
 

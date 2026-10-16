@@ -3,10 +3,10 @@ QSP Agent Debian package
 
 Installed paths:
 
-- Binary: /usr/bin/qsp-agent
+- Binary: /usr/bin/qspd
 - Configuration: /etc/qsp-agent/config.toml
 - Systemd unit: /lib/systemd/system/qsp-agent.service
-- Man page: /usr/share/man/man1/qsp-agent.1.gz
+- Man page: /usr/share/man/man1/qspd.1.gz
 
 The package installs a dedicated `qsp-agent` system user and group.
 

@@ -1,19 +1,19 @@
-.TH QSP-AGENT 1 "June 2026" "qsp-agent 0.1.0" "User Commands"
+.TH QSPD 1 "June 2026" "qspd 0.1.0" "User Commands"
 .SH NAME
-qsp-agent \- expose a radio transceiver through the QSP signaling service
+qspd \- expose a radio transceiver through the QSP signaling service
 .SH SYNOPSIS
-.B qsp-agent
+.B qspd
 [\fB-c\fR, \fB--config\fR \fICONFIG_PATH\fR]
 [\fB-d\fR, \fB--daemon\fR]
 .SH DESCRIPTION
-.B qsp-agent
+.B qspd
 is the QSP hardware agent. It connects a locally attached transceiver to remote
 clients through the QSP signaling server and WebRTC.
 .PP
 When managed by systemd, the service should run in the foreground. The packaged
 unit uses:
 .PP
-.B /usr/bin/qsp-agent --config /etc/qsp-agent/config.toml
+.B /usr/bin/qspd --config /etc/qsp-agent/config.toml
 .SH OPTIONS
 .TP
 .BR -c ", " --config " " \fICONFIG_PATH\fR

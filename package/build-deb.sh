@@ -5,9 +5,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 
 package_name="qsp-agent"
+binary_name="qspd"
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' "${repo_root}/qsp-agent/Cargo.toml" | head -n 1)"
 architecture="$(dpkg --print-architecture)"
-binary_path="${repo_root}/target/release/${package_name}"
+binary_path="${repo_root}/target/release/${binary_name}"
 
 if [[ -z "${version}" ]]; then
     echo "Failed to determine package version" >&2
@@ -55,13 +56,13 @@ mkdir -p \
     "${package_root}/usr/share/man/man1" \
     "${package_root}/usr/share/doc/${package_name}"
 
-install -m 0755 "${binary_path}" "${package_root}/usr/bin/${package_name}"
+install -m 0755 "${binary_path}" "${package_root}/usr/bin/${binary_name}"
 install -m 0644 "${repo_root}/package/config.toml" "${package_root}/etc/qsp-agent/config.toml"
 install -m 0644 "${repo_root}/package/systemd/qsp-agent.service" \
     "${package_root}/lib/systemd/system/qsp-agent.service"
-install -m 0644 "${repo_root}/package/man/qsp-agent.1" \
-    "${package_root}/usr/share/man/man1/qsp-agent.1"
-gzip -n -9 "${package_root}/usr/share/man/man1/qsp-agent.1"
+install -m 0644 "${repo_root}/package/man/${binary_name}.1" \
+    "${package_root}/usr/share/man/man1/${binary_name}.1"
+gzip -n -9 "${package_root}/usr/share/man/man1/${binary_name}.1"
 install -m 0644 "${repo_root}/Readme.md" \
     "${package_root}/usr/share/doc/${package_name}/README.md"
 install -m 0644 "${repo_root}/COPYING" \
@@ -77,7 +78,7 @@ printf '/etc/qsp-agent/config.toml\n' > "${debian_dir}/conffiles"
 dependencies="$(
     {
         printf 'adduser\n'
-        shared_library_packages "${package_root}/usr/bin/${package_name}"
+        shared_library_packages "${package_root}/usr/bin/${binary_name}"
     } | sort -u | join_dependencies
 )"
 

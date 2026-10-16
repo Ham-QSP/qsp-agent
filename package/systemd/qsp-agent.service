@@ -1,6 +1,6 @@
 [Unit]
 Description=QSP Agent
-Documentation=man:qsp-agent(1)
+Documentation=man:qspd(1)
 Wants=network-online.target
 After=network-online.target
 ConditionPathExists=/etc/qsp-agent/config.toml
@@ -13,7 +13,7 @@ WorkingDirectory=/var/lib/qsp-agent
 RuntimeDirectory=qsp-agent
 StateDirectory=qsp-agent
 UMask=0027
-ExecStart=/usr/bin/qsp-agent --config /etc/qsp-agent/config.toml
+ExecStart=/usr/bin/qspd --config /etc/qsp-agent/config.toml
 Restart=on-failure
 RestartSec=5s
 NoNewPrivileges=true
