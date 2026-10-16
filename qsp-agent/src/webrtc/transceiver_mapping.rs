@@ -108,7 +108,7 @@ pub(super) fn band_to_transceiver_band(band: Band) -> Option<TransceiverBand> {
         Band::Band17m => Some(TransceiverBand::Band17m),
         Band::Band15m => Some(TransceiverBand::Band15m),
         Band::Band12m => Some(TransceiverBand::Band12m),
-        Band::Band1om => Some(TransceiverBand::Band10m),
+        Band::Band10m => Some(TransceiverBand::Band10m),
         Band::Band6m => Some(TransceiverBand::Band6m),
         Band::Band4m => Some(TransceiverBand::Band4m),
         Band::Band2m => Some(TransceiverBand::Band2m),
